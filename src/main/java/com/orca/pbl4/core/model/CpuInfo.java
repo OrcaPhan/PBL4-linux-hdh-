@@ -2,19 +2,37 @@ package com.orca.pbl4.core.model;
 
 public class CpuInfo {
 
-    public long user;
-    public long nice;
-    public long system;
-    public long idle;
-    public long iowait;
-    public long irq;
-    public long softirq;
-    public long steal;
-    public long guest;
-    public long guestNice;
+    public final long user;
+    public final long nice;
+    public final long system;
+    public final long idle;
+    public final long iowait;
+    public final long irq;
+    public final long softirq;
+    public final long steal;
+    public final long guest;
+    public final long guestNice;
 
-    public int coreCount;
+    public final int coreCount;
     public float usagePercent;
+
+    public CpuInfo(long user, long nice, long system, long idle, long iowait, long irq, long softirq, long steal, long guest, long guestNice, int coreCount) {
+        this.user = user;
+        this.nice = nice;
+        this.system = system;
+        this.idle = idle;
+        this.iowait = iowait;
+        this.irq = irq;
+        this.softirq = softirq;
+        this.steal = steal;
+        this.guest = guest;
+        this.guestNice = guestNice;
+        this.coreCount = coreCount;
+    }
+
+    public long getTotal() {
+        return user+ nice+ system+ idle+ iowait+ irq+ softirq+ steal+ guest+ guestNice;
+    }
 
     // Tinhs %CPU su dung toan he thong tu 2 mau
     public void calcUsage(CpuInfo prev){
