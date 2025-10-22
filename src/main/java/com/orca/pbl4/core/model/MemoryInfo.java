@@ -1,12 +1,13 @@
 package com.orca.pbl4.core.model;
 
 public class MemoryInfo {
-    private long total;
-    private long used;
-    private long swapUsed;
+    private long totalKB;
+    private long usedKB;
+    private long swapTotalKB;
+    private long swapUsedKB;
 
-    public double readMemInfo(){
-        return 0;
+    public float readMemInfo(){
+        return totalKB == 0 ? 0f : (100f*(usedKB/(float)totalKB));
     }
 
 }
