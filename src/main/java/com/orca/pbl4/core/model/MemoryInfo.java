@@ -4,14 +4,16 @@ public class MemoryInfo {
     private long totalKB;
     private long usedKB;
     private long cachedKB;
+    private long availableKB;
     private long swapTotalKB;
     private long swapUsedKB;
 
     public MemoryInfo() {}
-    public MemoryInfo( long totalKB, long usedKB, long cachedKB , long swapTotalKB, long swapUsedKB) {
+    public MemoryInfo( long totalKB, long usedKB, long cachedKB ,long availableKB, long swapTotalKB, long swapUsedKB) {
         this.totalKB = totalKB;
         this.usedKB = usedKB;
         this.cachedKB = cachedKB;
+        this.availableKB = availableKB;
         this.swapTotalKB = swapTotalKB;
         this.swapUsedKB = swapUsedKB;
     }
@@ -30,6 +32,8 @@ public class MemoryInfo {
     }
     public long getCachedKB() {return cachedKB; }
     public void setCachedKB(long cachedKB) {this.cachedKB = cachedKB;}
+    public long getAvailableKB() {return availableKB; }
+    public void setAvailableKB(long availableKB) {this.availableKB = availableKB;}
     public long getSwapTotalKB() {
         return swapTotalKB;
     }
