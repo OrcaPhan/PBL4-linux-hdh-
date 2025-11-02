@@ -28,7 +28,5 @@ public class HandleInfo {
     public String getFlags() {
         return flags;
     }
-    public String toString() {
-        return "HandleInfo{ fd=" + fd + ", type=" + type + ", target=" + target + ", flags=" + flags + " }";
-    }
+
 }

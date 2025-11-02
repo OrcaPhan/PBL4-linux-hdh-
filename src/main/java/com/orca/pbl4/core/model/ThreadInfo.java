@@ -20,7 +20,6 @@ public class ThreadInfo {
     }
     public String getName() {
         return name;
-
     }
     public String getState() {
         return state;
@@ -29,7 +28,5 @@ public class ThreadInfo {
         return cpuTimeTicks;
     }
 
-    public String toString() {
-        return "ThreadInfor{ tid=" + tid + ", name=" + name +", state=" + state + ", cpuTimeTicks=" + cpuTimeTicks + "}";
-    }
+
 }

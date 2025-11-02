@@ -1,22 +1,24 @@
 package com.orca.pbl4.core.model;
 
+
 public class CpuInfo {
 
-    public final long user;
-    public final long nice;
-    public final long system;
-    public final long idle;
-    public final long iowait;
-    public final long irq;
-    public final long softirq;
-    public final long steal;
-    public final long guest;
-    public final long guestNice;
+    private long user;
+    private long nice;
+    private long system;
+    private long idle;
+    private long iowait;
+    private long irq;
+    private long softirq;
+    private long steal;
+    private long guest;
+    private long guestNice;
+    private int coreCount;
 
-    public final int coreCount;
-    public float usagePercent;
+    public CpuInfo() {}
 
-    public CpuInfo(long user, long nice, long system, long idle, long iowait, long irq, long softirq, long steal, long guest, long guestNice, int coreCount) {
+    public CpuInfo(long user, long nice, long system, long idle, long iowait,
+                   long irq, long softirq, long steal, long guest, long guestNice, int coreCount) {
         this.user = user;
         this.nice = nice;
         this.system = system;
@@ -30,35 +32,38 @@ public class CpuInfo {
         this.coreCount = coreCount;
     }
 
-    public long getTotal() {
-        return user+ nice+ system+ idle+ iowait+ irq+ softirq+ steal+ guest+ guestNice;
-    }
 
-    // Tinhs %CPU su dung toan he thong tu 2 mau
-    public void calcUsage(CpuInfo prev){
-        if(prev == null){
-            usagePercent = 0f;
-            return;
-        }
+    public long getUser() { return user; }
+    public void setUser(long user) { this.user = user; }
 
-        long idleAll = idle + iowait;
-        long idleAllPrev = prev.idle + prev.iowait;
+    public long getNice() { return nice; }
+    public void setNice(long nice) { this.nice = nice; }
 
-        long nonIdle = user + nice + system + irq + softirq +steal + guest + guestNice;
-        long nonIdlePrevPrev = prev.user + prev.nice + prev.system + prev.irq + prev.softirq + prev.steal + prev.guest + prev.guestNice;
+    public long getSystem() { return system; }
+    public void setSystem(long system) { this.system = system; }
 
-        long total = idleAll + nonIdle;
-        long totalPrev = idleAllPrev + nonIdlePrevPrev;
+    public long getIdle() { return idle; }
+    public void setIdle(long idle) { this.idle = idle; }
 
-        long totald = total - totalPrev;
-        long idled = idleAll - idleAllPrev;
+    public long getIowait() { return iowait; }
+    public void setIowait(long iowait) { this.iowait = iowait; }
 
-        if( total <= 0) {
-            usagePercent = 0f;
-            return;
-        }
+    public long getIrq() { return irq; }
+    public void setIrq(long irq) { this.irq = irq; }
 
-        usagePercent = (float)(100.0*((totald-idled)/(double)totald));
-    }
+    public long getSoftirq() { return softirq; }
+    public void setSoftirq(long softirq) { this.softirq = softirq; }
+
+    public long getSteal() { return steal; }
+    public void setSteal(long steal) { this.steal = steal; }
+
+    public long getGuest() { return guest; }
+    public void setGuest(long guest) { this.guest = guest; }
+
+    public long getGuestNice() { return guestNice; }
+    public void setGuestNice(long guestNice) { this.guestNice = guestNice; }
+
+    public int getCoreCount() { return coreCount; }
+    public void setCoreCount(int coreCount) { this.coreCount = coreCount; }
 
 }

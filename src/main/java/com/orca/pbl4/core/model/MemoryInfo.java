@@ -1,20 +1,46 @@
 package com.orca.pbl4.core.model;
 
 public class MemoryInfo {
-    private final long totalKB;
-    private final long usedKB;
-    private final long swapTotalKB;
-    private final long swapUsedKB;
+    private long totalKB;
+    private long usedKB;
+    private long cachedKB;
+    private long swapTotalKB;
+    private long swapUsedKB;
 
-    public MemoryInfo( long totalKB, long usedKB, long swapTotalKB, long swapUsedKB) {
+    public MemoryInfo() {}
+    public MemoryInfo( long totalKB, long usedKB, long cachedKB , long swapTotalKB, long swapUsedKB) {
         this.totalKB = totalKB;
         this.usedKB = usedKB;
+        this.cachedKB = cachedKB;
         this.swapTotalKB = swapTotalKB;
         this.swapUsedKB = swapUsedKB;
     }
 
-    public float readMemInfo(){
-        return totalKB == 0 ? 0f : (100f*(usedKB/(float)totalKB));
+    public long getTotalKB() {
+        return totalKB;
+    }
+    public void setTotalKB(long totalKB) {
+        this.totalKB = totalKB;
+    }
+    public long getUsedKB() {
+        return usedKB;
+    }
+    public void setUsedKB(long usedKB) {
+        this.usedKB = usedKB;
+    }
+    public long getCachedKB() {return cachedKB; }
+    public void setCachedKB(long cachedKB) {this.cachedKB = cachedKB;}
+    public long getSwapTotalKB() {
+        return swapTotalKB;
+    }
+    public void setSwapTotalKB(long swapTotalKB) {
+        this.swapTotalKB = swapTotalKB;
+    }
+    public long getSwapUsedKB() {
+        return swapUsedKB;
+    }
+    public void setSwapUsedKB(long swapUsedKB) {
+        this.swapUsedKB = swapUsedKB;
     }
 
 }
