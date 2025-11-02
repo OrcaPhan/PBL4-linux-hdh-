@@ -37,6 +37,7 @@ public class MemInfoReader {
         m.setTotalKB(memTotal);
         m.setUsedKB(memTotal-memAvailable);
         m.setCachedKB(cached);
+        m.setAvailableKB(memAvailable);
 //        m.setUsedKB(memTotal-memFree-buffers-cached);
         m.setSwapTotalKB(swapTotal);
         m.setSwapUsedKB(swapTotal-swapFree);
