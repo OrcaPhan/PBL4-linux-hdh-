@@ -66,4 +66,8 @@ public class CpuInfo {
     public int getCoreCount() { return coreCount; }
     public void setCoreCount(int coreCount) { this.coreCount = coreCount; }
 
+
+    public long getTotalTicks() {
+        return user + nice + system + idle + iowait + irq + softirq + steal;
+    }
 }
