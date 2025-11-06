@@ -2,6 +2,7 @@ package com.orca.pbl4.api;
 
 import com.orca.pbl4.core.model.*;
 import com.orca.pbl4.core.system.Sampler;
+import com.orca.pbl4.core.system.SystemSnapshot;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
