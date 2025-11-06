@@ -71,7 +71,7 @@ chmod +x build-desktop.sh
 
 ```bash
 # Tìm file .deb vừa build
-cd "Memory Management App Design/src-tauri/target/release/bundle/deb/"
+cd frontend/src-tauri/target/release/bundle/deb/
 
 # Cài đặt
 sudo dpkg -i orca-system-monitor_*.deb
@@ -83,13 +83,14 @@ sudo dpkg -i orca-system-monitor_*.deb
 
 ### Terminal 1 - Backend:
 ```bash
+cd backend
 mvn clean package
 java -jar target/PBL4_vr2-1.0-SNAPSHOT.jar
 ```
 
 ### Terminal 2 - Frontend:
 ```bash
-cd "Memory Management App Design"
+cd frontend
 npm install
 npm run dev
 ```

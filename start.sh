@@ -44,6 +44,7 @@ echo -e "${GREEN}✓ Node.js version: $(node -v)${NC}"
 
 # Build Backend nếu chưa có
 echo -e "\n${YELLOW}Building Backend...${NC}"
+cd backend
 if [ ! -f "target/PBL4_vr2-1.0-SNAPSHOT.jar" ]; then
     echo "Building with Maven..."
     mvn clean package -DskipTests
@@ -53,10 +54,11 @@ if [ ! -f "target/PBL4_vr2-1.0-SNAPSHOT.jar" ]; then
     fi
 fi
 echo -e "${GREEN}✓ Backend built successfully${NC}"
+cd ..
 
 # Install Frontend dependencies nếu chưa có
 echo -e "\n${YELLOW}Checking Frontend dependencies...${NC}"
-cd "Memory Management App Design"
+cd frontend
 if [ ! -d "node_modules" ]; then
     echo "Installing npm dependencies..."
     npm install
@@ -99,10 +101,12 @@ trap cleanup SIGINT SIGTERM
 
 # Chạy Backend
 echo -e "\n${YELLOW}Starting Backend on port 8080...${NC}"
+cd backend
 java -jar target/PBL4_vr2-1.0-SNAPSHOT.jar > /tmp/orca-backend.log 2>&1 &
 BACKEND_PID=$!
 echo $BACKEND_PID > "$BACKEND_PID_FILE"
 echo -e "${GREEN}✓ Backend started (PID: $BACKEND_PID)${NC}"
+cd ..
 
 # Đợi Backend khởi động
 echo -e "${YELLOW}Waiting for backend to start...${NC}"
@@ -136,7 +140,7 @@ fi
 
 # Chạy Frontend
 echo -e "\n${YELLOW}Starting Frontend on port 5173...${NC}"
-cd "Memory Management App Design"
+cd frontend
 npm run dev > /tmp/orca-frontend.log 2>&1 &
 FRONTEND_PID=$!
 echo $FRONTEND_PID > "$FRONTEND_PID_FILE"

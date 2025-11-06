@@ -41,21 +41,23 @@ echo -e "${GREEN}✓ All system dependencies installed${NC}"
 
 # Build Backend
 echo -e "\n${YELLOW}Building Java Backend...${NC}"
+cd backend
 mvn clean package -DskipTests
 if [ $? -ne 0 ]; then
     echo -e "${RED}Error: Maven build failed${NC}"
     exit 1
 fi
 echo -e "${GREEN}✓ Backend built successfully${NC}"
+cd ..
 
 # Copy backend jar to frontend directory for packaging
-mkdir -p "Memory Management App Design/backend"
-cp target/PBL4_vr2-1.0-SNAPSHOT.jar "Memory Management App Design/backend/"
+mkdir -p "frontend/backend"
+cp backend/target/PBL4_vr2-1.0-SNAPSHOT.jar "frontend/backend/"
 echo -e "${GREEN}✓ Backend JAR copied${NC}"
 
 # Build Frontend with Tauri
 echo -e "\n${YELLOW}Building Frontend and Desktop App...${NC}"
-cd "Memory Management App Design"
+cd frontend
 
 # Install dependencies
 npm install
@@ -82,12 +84,12 @@ echo "✓ Build completed successfully!"
 echo "===================================${NC}"
 echo ""
 echo "Desktop app packages can be found in:"
-echo "  Memory Management App Design/src-tauri/target/release/bundle/"
+echo "  frontend/src-tauri/target/release/bundle/"
 echo ""
 echo "Available formats:"
 echo "  - .deb (Debian/Ubuntu package)"
 echo "  - AppImage (Universal Linux binary)"
 echo ""
 echo "To install the .deb package:"
-echo "  sudo dpkg -i 'Memory Management App Design/src-tauri/target/release/bundle/deb/orca-system-monitor_*.deb'"
+echo "  sudo dpkg -i 'frontend/src-tauri/target/release/bundle/deb/orca-system-monitor_*.deb'"
 echo ""

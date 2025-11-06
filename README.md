@@ -52,6 +52,9 @@ sudo apt install libwebkit2gtk-4.0-dev \
 ### 2. Build và chạy Backend
 
 ```bash
+# Chuyển vào thư mục backend
+cd backend
+
 # Build Java backend
 mvn clean package
 
@@ -59,6 +62,9 @@ mvn clean package
 java -jar target/PBL4_vr2-1.0-SNAPSHOT.jar
 # hoặc
 mvn spring-boot:run
+
+# Quay lại thư mục gốc
+cd ..
 ```
 
 Backend sẽ chạy tại: `http://localhost:8080`
@@ -66,13 +72,16 @@ Backend sẽ chạy tại: `http://localhost:8080`
 ### 3. Build và chạy Frontend
 
 ```bash
-cd "Memory Management App Design"
+cd frontend
 
 # Cài đặt dependencies
 npm install
 
 # Chạy development server
 npm run dev
+
+# Quay lại thư mục gốc
+cd ..
 ```
 
 Frontend sẽ chạy tại: `http://localhost:5173`
@@ -80,13 +89,16 @@ Frontend sẽ chạy tại: `http://localhost:5173`
 ### 4. Build Desktop App với Tauri
 
 ```bash
-cd "Memory Management App Design"
+cd frontend
 
 # Cài đặt Tauri CLI
 npm install -D @tauri-apps/cli
 
 # Build desktop app
 npm run tauri build
+
+# Quay lại thư mục gốc
+cd ..
 ```
 
 File .deb sẽ được tạo trong thư mục `src-tauri/target/release/bundle/deb/`
@@ -97,12 +109,13 @@ File .deb sẽ được tạo trong thư mục `src-tauri/target/release/bundle/
 
 1. Chạy Backend:
 ```bash
+cd backend
 mvn spring-boot:run
 ```
 
 2. Trong terminal khác, chạy Frontend:
 ```bash
-cd "Memory Management App Design"
+cd frontend
 npm run dev
 ```
 
@@ -112,12 +125,13 @@ npm run dev
 
 1. Chạy Backend:
 ```bash
+cd backend
 java -jar target/PBL4_vr2-1.0-SNAPSHOT.jar
 ```
 
 2. Chạy Desktop App:
 ```bash
-cd "Memory Management App Design"
+cd frontend
 npm run tauri dev
 ```
 
