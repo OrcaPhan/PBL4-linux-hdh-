@@ -40,3 +40,32 @@ Thumbs.db
 # ===========================
 *.log
 *.tmp
+
+# ===========================
+# Node.js / npm
+# ===========================
+node_modules/
+npm-debug.log
+yarn-error.log
+package-lock.json
+.pnpm-debug.log
+
+# ===========================
+# Frontend build
+# ===========================
+dist/
+.vite/
+.next/
+
+# ===========================
+# Tauri
+# ===========================
+src-tauri/target/
+src-tauri/Cargo.lock
+
+# ===========================
+# Environment files
+# ===========================
+.env
+.env.local
+.env.production
