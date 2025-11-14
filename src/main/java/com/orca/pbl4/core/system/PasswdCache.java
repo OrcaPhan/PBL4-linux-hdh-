@@ -1,4 +1,4 @@
-package com.orca.pbl4.core.system.reader;
+package com.orca.pbl4.core.system;
 
 import java.io.BufferedReader;
 import java.io.IOException;

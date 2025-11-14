@@ -2,8 +2,8 @@ package com.orca.pbl4.core.system.reader;
 
 import com.orca.pbl4.core.model.ProcessInfo;
 import com.orca.pbl4.core.model.ThreadInfo;
+import com.orca.pbl4.core.system.PasswdCache;
 
-import java.nio.file.Path;
 import java.util.*;
 
 public class ProcReader {
@@ -37,6 +37,13 @@ public class ProcReader {
             p.setPid(pid);
 
 // /proc/<pid>/stat: name trong ngoặc (), trạng thái ở cột 3, utime(14), stime(15), nice(19), starttime(22)
+//            String level;
+//            if (nice <= -10) level = "High";
+//            else if (nice < 0) level = "Above Normal";
+//            else if (nice == 0) level = "Normal";
+//            else if (nice <= 10) level = "Below Normal";
+//            else level = "Low";
+
             ParsedStat s = parseStat(stat);
             p.setName(s.comm);
             p.setState(String.valueOf(s.state));
@@ -46,7 +53,14 @@ public class ProcReader {
 
 // /proc/<pid>/status: tìm Uid, VmRSS
             Map<String, String> kv = parseStatus(status);
-            p.setUser(kv.getOrDefault("NameUID", kv.getOrDefault("Uid", "?"))); // placeholder: service có thể map UID→user
+            String realUid  = kv.getOrDefault("NameUID", kv.getOrDefault("Uid", "?"));
+            int Uid = Integer.parseInt(realUid.trim().split("\\s+")[0]);
+            String user = PasswdCache.get().usernameOf(Uid);
+//            p.setUser(kv.getOrDefault("NameUID", kv.getOrDefault("Uid", "?"))); // placeholder: service có thể map UID→user
+            p.setUser(String.valueOf(user));
+//            p.setUser("orca");
+
+
             long rssKB = parseVmRssKb(kv.get("VmRSS"));
 // model dùng rssPages → convert ngược theo 4KB/page (giả sử). Nếu bạn dùng rssKB trực tiếp, sửa model tuỳ ý.
             long pageSizeKB = 4;

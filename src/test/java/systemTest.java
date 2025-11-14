@@ -113,6 +113,7 @@ public class systemTest {
         System.out.println();
         System.out.printf("%-6s %-10s %-28s %7s %7s %10s %-2s %5s ",
                 "PID", "USER", "NAME", "%CPU", "%MEM", "RSS", "ST", "NICE");
+        System.out.println();
         System.out.println("------ ---------- ---------------------------- ------- ------- ---------- -- -----");
     }
 
