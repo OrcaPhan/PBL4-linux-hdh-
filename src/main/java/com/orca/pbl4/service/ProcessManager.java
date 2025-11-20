@@ -16,7 +16,7 @@ import java.util.*;
  */
 public class ProcessManager {
     private final SystemMonitor monitor;
-    private final int period; // ms
+    private volatile int period; // ms
     private SystemSnapshot oldSnap;
     private final Map<Integer, Float> smoothCpu = new HashMap<>();
     private static final float ALPHA = 0.3f; // hệ số EMA
@@ -29,6 +29,15 @@ public class ProcessManager {
 
     public ProcessManager(SystemMonitor monitor) {
         this(monitor, 1000);
+    }
+
+    public void setPeriod(int period) {
+        if (period <= 0) return;
+        this.period = period;
+    }
+
+    public int getPeriod() {
+        return period;
     }
 
     /** Lấy danh sách ProcessRow mượt */
