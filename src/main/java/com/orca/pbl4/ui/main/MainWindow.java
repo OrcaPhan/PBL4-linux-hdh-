@@ -3,7 +3,7 @@ package com.orca.pbl4.ui.main;
 import com.orca.pbl4.core.system.SystemMonitor;
 import com.orca.pbl4.service.process.DefaultProcessManager;
 import com.orca.pbl4.service.process.ProcessManager;
-import com.orca.pbl4.ui.process.MetricsPanel;
+import com.orca.pbl4.ui.metrics.MetricsPanel;
 import com.orca.pbl4.ui.process.ProcessTablePanel;
 
 import javax.swing.JFrame;
