@@ -14,6 +14,7 @@ public class MetricsSidebarPanel extends JPanel {
     private final JLabel lblCpuCores = new JLabel("0 cores");
 
     private final JLabel lblMemPercent = new JLabel("0.0%");
+    private final JLabel lblCachePercent = new JLabel("0.0%");
     private final JLabel lblSwap = new JLabel("not available");
     private final MemoryGaugePanel memGauge = new MemoryGaugePanel();
 
@@ -47,6 +48,8 @@ public class MetricsSidebarPanel extends JPanel {
         memPanel.add(label("Memory", true));
         memPanel.add(lblMemPercent);
         memPanel.add(Box.createVerticalStrut(6));
+        memPanel.add(label("Cache", false));
+        memPanel.add(lblCachePercent);
         memGauge.setAlignmentX(Component.LEFT_ALIGNMENT);
         memPanel.add(memGauge);
         memPanel.add(Box.createVerticalStrut(6));
@@ -89,6 +92,7 @@ public class MetricsSidebarPanel extends JPanel {
         lblMemPercent.setText(percentText);
         this.lastMemPercent = Float.parseFloat(percentText.replace("%", ""));
         this.lastMem = mem;
+        lblCachePercent.setText((float)lastMem.getCachedKB()/(1024*1024)+" GB");
         memGauge.repaint();
     }
 

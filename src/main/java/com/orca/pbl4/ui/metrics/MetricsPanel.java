@@ -80,6 +80,7 @@ public class MetricsPanel extends JPanel implements ProcessUpdateListener {
             float memPercent = computeMemPercent(mem);
             sidebar.updateMemory(DF1.format(memPercent) + "%", mem);
             memChart.addPoint(memPercent);
+//            sidebar.
 
             // swap
             long swapTotal = mem.getSwapTotalKB();

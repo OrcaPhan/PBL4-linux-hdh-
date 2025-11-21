@@ -181,7 +181,7 @@ public class DefaultProcessManager implements ProcessManager {
             }
 
             float cpuPercent = deltaProc * 100f / deltaTotal;
-            cpuPercent *= cores;
+//            cpuPercent *= cores;
 
             float smooth = smoothCpu(cur.getPid(), cpuPercent);
 
