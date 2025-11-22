@@ -2,15 +2,25 @@ package com.orca.pbl4.core.system.reader;
 
 import com.orca.pbl4.core.model.ProcessInfo;
 import com.orca.pbl4.core.model.ThreadInfo;
+import com.orca.pbl4.core.model.HandleInfo;
 import com.orca.pbl4.core.system.PasswdCache;
 
 import java.util.*;
 
 public class ProcReader {
     private final ProcFs proc;
+    private final ThreadReader threadReader;
+    private final HandleReader handleReader;
 
-    public ProcReader() { this(new ProcFs()); }
-    public ProcReader(ProcFs proc) { this.proc = proc; }
+    public ProcReader() {
+        this(new ProcFs());
+    }
+
+    public ProcReader(ProcFs proc) {
+        this.proc = proc;
+        this.threadReader = new ThreadReader(proc);
+        this.handleReader = new HandleReader(proc);
+    }
 
     public List<Integer> listPids() {
         return proc.listNumericDirs(""); // root /proc
@@ -85,6 +95,61 @@ public class ProcReader {
             return p;
         } catch (Exception e) {
             return null; // tiến trình có thể biến mất giữa chừng, trả null cho an toàn
+        }
+    }
+
+    /**
+     * Đọc đầy đủ thông tin process bao gồm threads, handles, statm (virtual/shared memory).
+     * Dùng khi cần hiển thị chi tiết (ví dụ ProcessDetailDialog).
+     * @param pid Process ID
+     * @return ProcessInfo đầy đủ hoặc null nếu không đọc được
+     */
+    public ProcessInfo readOneDetail(int pid) {
+        ProcessInfo p = readOne(pid, true); // luôn đọc cmdline
+        if (p == null) return null;
+
+        try {
+            // Đọc statm cho virtual và shared memory
+            // Format: size resident share text lib data dt (pages)
+            // size = total virtual memory, share = shared memory
+            String statm = safeRead(pid, "statm");
+            if (statm != null) {
+                String[] parts = statm.trim().split("\\s+");
+                if (parts.length >= 3) {
+                    long sizePages = parseLong(parts, 0);      // total virtual memory
+                    long sharePages = parseLong(parts, 2);     // shared memory
+                    p.setVirtualPages(sizePages);
+                    p.setSharedPages(sharePages);
+                }
+            }
+
+            // Đọc threads
+            List<ThreadInfo> threads = threadReader.readThreads(pid);
+            p.setThreads(threads);
+
+            // Đọc handles
+            List<HandleInfo> handles = handleReader.readHandles(pid);
+            p.setHandles(handles);
+
+            // Đọc priority từ /proc/<pid>/stat (cột 18)
+            // Priority = nice + 20, nhưng trong /proc/<pid>/stat cột 18 là priority
+            // Tuy nhiên, nice đã được đọc rồi, nên có thể tính priority = nice + 20
+            // Hoặc đọc từ /proc/<pid>/stat cột 18 (priority)
+            String stat = safeRead(pid, "stat");
+            if (stat != null) {
+                ParsedStat s = parseStat(stat);
+                // Priority trong /proc/<pid>/stat là cột 18 (sau khi bỏ pid, comm)
+                // rest[16] = priority (18th overall)
+                String after = stat.substring(stat.lastIndexOf(')') + 1).trim();
+                String[] rest = after.split("\\s+");
+                long priority = parseLong(rest, 16 - 2); // 18th → index 16
+                p.setPriority((int) priority);
+            }
+
+            return p;
+        } catch (Exception e) {
+            // Nếu đọc thêm thông tin lỗi, vẫn trả về ProcessInfo cơ bản
+            return p;
         }
     }
     private static class ParsedStat {

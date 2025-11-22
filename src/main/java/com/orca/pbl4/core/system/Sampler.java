@@ -57,10 +57,18 @@ public class Sampler {
     /** Lấy đầy đủ một mẫu hệ thống (raw) tại thời điểm gọi. */
     public SystemSnapshot readAll(boolean withCmdline) {
         CpuInfo cpu = readCpu();
+        List<CpuInfo> perCoreCpus = cpuReader.readPerCore();
         MemoryInfo mem = readMemory();
         DiskInfo disk = readDiskTotal();
         NetworkInfo net = readNetTotal();
         List<ProcessInfo> procs = readProcesses(withCmdline);
-        return new SystemSnapshot(cpu, mem, disk, net, procs, System.nanoTime());
+        SystemSnapshot snapshot = new SystemSnapshot(cpu, mem, disk, net, procs, System.nanoTime());
+        snapshot.setPerCoreCpus(perCoreCpus);
+        return snapshot;
+    }
+
+    /** Lấy ProcReader để đọc chi tiết process khi cần. */
+    public ProcReader getProcReader() {
+        return procReader;
     }
 }

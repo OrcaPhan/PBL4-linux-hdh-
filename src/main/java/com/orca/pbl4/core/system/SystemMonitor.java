@@ -22,6 +22,8 @@ public class SystemMonitor {
     // --- Gói đầy đủ ---
     public SystemSnapshot getSystemSnapshot(boolean withCmdline) { return sampler.readAll(withCmdline); }
 
+    /** Lấy Sampler để truy cập các reader khi cần. */
+    public Sampler getSampler() { return sampler; }
 
     /** Không cần tài nguyên nền, close để tuân thủ try-with-resources nếu dùng */
 //    @Override public void close() { /* no-op */ }

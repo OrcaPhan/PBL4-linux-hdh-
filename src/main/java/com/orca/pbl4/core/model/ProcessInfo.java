@@ -17,7 +17,9 @@ public class ProcessInfo {
     private int nice;
 
     private long procCpuTicks;
-    private long rssPages;
+    private long rssPages;          // Resident Set Size (pages)
+    private long virtualPages;     // Virtual memory size (pages) - từ /proc/<pid>/statm
+    private long sharedPages;      // Shared memory (pages) - từ /proc/<pid>/statm
     private long startTimeTicks;
 
     private long ioReadBytes;
@@ -67,6 +69,12 @@ public class ProcessInfo {
 
     public long getRssPages() { return rssPages; }
     public void setRssPages(long rssPages) { this.rssPages = rssPages; }
+
+    public long getVirtualPages() { return virtualPages; }
+    public void setVirtualPages(long virtualPages) { this.virtualPages = virtualPages; }
+
+    public long getSharedPages() { return sharedPages; }
+    public void setSharedPages(long sharedPages) { this.sharedPages = sharedPages; }
 
     public long getStartTimeTicks() { return startTimeTicks; }
     public void setStartTimeTicks(long startTimeTicks) { this.startTimeTicks = startTimeTicks; }
