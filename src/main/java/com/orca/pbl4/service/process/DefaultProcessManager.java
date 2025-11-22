@@ -7,6 +7,7 @@ import com.orca.pbl4.core.model.ThreadInfo;
 import com.orca.pbl4.core.system.SystemMonitor;
 import com.orca.pbl4.core.system.SystemSnapshot;
 
+import java.lang.ProcessHandle;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -92,7 +93,7 @@ public class DefaultProcessManager implements ProcessManager {
 
     @Override
     public boolean killProcess(int pid) {
-        return ProcessHandle.of(pid).map(ProcessHandle::destroy).orElse(false);
+        return sendSignal(pid, "KILL");
     }
 
     @Override
@@ -137,6 +138,12 @@ public class DefaultProcessManager implements ProcessManager {
     public List<HandleInfo> getHandles(int pid) {
         ProcessInfo info = getProcessInfo(pid);
         return info != null ? info.getHandles() : Collections.emptyList();
+    }
+
+    @Override
+    public ProcessInfo getProcessDetail(int pid) {
+        // Đọc đầy đủ thông tin từ /proc qua ProcReader
+        return monitor.getSampler().getProcReader().readOneDetail(pid);
     }
 
     @Override

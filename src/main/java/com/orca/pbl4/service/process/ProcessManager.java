@@ -45,6 +45,14 @@ public interface ProcessManager {
     List<HandleInfo> getHandles(int pid);
 
     /**
+     * Lấy thông tin đầy đủ của tiến trình (bao gồm threads, handles, virtual/shared memory).
+     * Dùng khi cần hiển thị chi tiết (ví dụ ProcessDetailDialog).
+     * @param pid Process ID
+     * @return ProcessInfo đầy đủ hoặc null nếu không tìm thấy
+     */
+    ProcessInfo getProcessDetail(int pid);
+
+    /**
      * Snapshot thô mới nhất (nếu UI cần số liệu tổng quan).
      */
     SystemSnapshot getCurrentSnapshot();
