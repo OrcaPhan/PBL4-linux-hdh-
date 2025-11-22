@@ -4,6 +4,8 @@ import com.orca.pbl4.core.model.MemoryInfo;
 
 import javax.swing.*;
 import java.awt.*;
+import java.util.ArrayList;
+import java.util.List;
 
 import static com.orca.pbl4.ui.metrics.MetricsPanel.DF1;
 import static com.orca.pbl4.ui.metrics.MetricsPanel.DF2;
@@ -12,6 +14,9 @@ public class MetricsSidebarPanel extends JPanel {
 
     private final JLabel lblCpuPercent = new JLabel("0.0%");
     private final JLabel lblCpuCores = new JLabel("0 cores");
+    // Panel chứa legend per-core (CPU1, CPU2, ...)
+    private final JPanel cpuLegendPanel = new JPanel();
+    private final List<CoreLegendItem> coreLegendItems = new ArrayList<>();
 
     private final JLabel lblMemPercent = new JLabel("0.0%");
     private final JLabel lblCachePercent = new JLabel("0.0%");
@@ -23,6 +28,24 @@ public class MetricsSidebarPanel extends JPanel {
 
     private MemoryInfo lastMem;
     private float lastMemPercent;
+
+    // cho cùng package dùng được (MetricsSidebarPanel)
+    static final Color[] CORE_COLORS = {
+            new Color(0xFF0000),
+            new Color(0xFB8C00),
+            new Color(0xBA9502),
+            new Color(0x72FF7A),
+            new Color(0x00B13E),
+            new Color(0x0CE3FF),
+            new Color(0x0084FF),
+            new Color(0x8E24AA),
+            new Color(0xBC3FFF),
+            new Color(0xFF00A3),
+            new Color(0x4A0227),
+            new Color(0x1A2F70),
+    };
+
+
 
     public MetricsSidebarPanel() {
         setLayout(new GridLayout(3, 1, 0, 8));
@@ -38,6 +61,14 @@ public class MetricsSidebarPanel extends JPanel {
         cpuPanel.add(label("CPU", true));
         cpuPanel.add(lblCpuPercent);
         cpuPanel.add(lblCpuCores);
+        cpuPanel.add(Box.createVerticalStrut(8));
+        
+        // Legend panel cho per-core
+        cpuLegendPanel.setOpaque(false);
+        cpuLegendPanel.setLayout(new BoxLayout(cpuLegendPanel, BoxLayout.Y_AXIS));
+        cpuLegendPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        cpuPanel.add(cpuLegendPanel);
+        
         cpuPanel.add(Box.createVerticalGlue());
 
         // Memory block
@@ -88,11 +119,49 @@ public class MetricsSidebarPanel extends JPanel {
         lblCpuCores.setText(cores + " cores");
     }
 
+    /**
+     * Cập nhật CPU với legend per-core.
+     * @param totalPercent %CPU tổng (0-100)
+     * @param perCorePercent Mảng %CPU của từng core (0-100), có thể null hoặc rỗng
+     */
+    public void updateCpuCores(float totalPercent, float[] perCorePercent) {
+        lblCpuPercent.setText(DF1.format(totalPercent) + "%");
+        
+        int coreCount = (perCorePercent != null) ? perCorePercent.length : 0;
+        lblCpuCores.setText(coreCount + " cores");
+        
+        // Đảm bảo có đủ legend items
+        while (coreLegendItems.size() < coreCount) {
+            CoreLegendItem item = new CoreLegendItem(coreLegendItems.size() + 1);
+            coreLegendItems.add(item);
+            cpuLegendPanel.add(item);
+        }
+        
+        // Ẩn các items thừa
+        for (int i = coreCount; i < coreLegendItems.size(); i++) {
+            coreLegendItems.get(i).setVisible(false);
+        }
+        
+        // Cập nhật giá trị cho từng core
+        for (int i = 0; i < coreCount; i++) {
+            CoreLegendItem item = coreLegendItems.get(i);
+            item.setVisible(true);
+            // Nếu không có dữ liệu, truyền NaN để hiển thị "--.-%"
+            float percent = (perCorePercent != null && i < perCorePercent.length) 
+                    ? perCorePercent[i] : Float.NaN;
+            item.update(percent);
+        }
+        
+        cpuLegendPanel.revalidate();
+        cpuLegendPanel.repaint();
+    }
+
     public void updateMemory(String percentText, MemoryInfo mem) {
         lblMemPercent.setText(percentText);
         this.lastMemPercent = Float.parseFloat(percentText.replace("%", ""));
         this.lastMem = mem;
-        lblCachePercent.setText((float)lastMem.getCachedKB()/(1024*1024)+" GB");
+        float cacheGB = (float) lastMem.getCachedKB() / (1024 * 1024);
+        lblCachePercent.setText(String.format("%.2f GB", cacheGB));
         memGauge.repaint();
     }
 
@@ -183,6 +252,54 @@ public class MetricsSidebarPanel extends JPanel {
             float mb = kb / 1024f;
             if (mb < 1024) return DF1.format(mb) + " MB";
             return DF2.format(mb / 1024f) + " GB";
+        }
+    }
+
+    // ==== Core Legend Item ====
+    /**
+     * Một dòng legend cho một core (◼ CPU1 23.4%).
+     */
+    private static class CoreLegendItem extends JPanel {
+        private final int coreIndex;
+        private final JLabel colorBox = new JLabel();
+        private final JLabel label = new JLabel();
+        private Color coreColor;
+
+        CoreLegendItem(int coreIndex) {
+            this.coreIndex = coreIndex;
+            this.coreColor = CORE_COLORS[(coreIndex - 1) % CORE_COLORS.length];
+            
+            setOpaque(false);
+            setLayout(new BoxLayout(this, BoxLayout.X_AXIS));
+            setAlignmentX(Component.LEFT_ALIGNMENT);
+            setMaximumSize(new Dimension(Integer.MAX_VALUE, 20));
+            
+            // Ô màu vuông nhỏ
+            colorBox.setPreferredSize(new Dimension(12, 12));
+            colorBox.setMinimumSize(new Dimension(12, 12));
+            colorBox.setMaximumSize(new Dimension(12, 12));
+            colorBox.setOpaque(true);
+            colorBox.setBackground(coreColor);
+            colorBox.setBorder(BorderFactory.createLineBorder(Color.GRAY, 1));
+            
+            // Label text
+            label.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
+            label.setText("CPU" + coreIndex + " --.-%");
+            
+            add(colorBox);
+            add(Box.createHorizontalStrut(6));
+            add(label);
+            add(Box.createHorizontalGlue());
+        }
+
+        void update(float percent) {
+            // Hiển thị "--.-%" nếu chưa có dữ liệu (percent < 0 hoặc NaN)
+            // percent = 0f có thể là CPU thực sự = 0%, nên vẫn hiển thị "0.0%"
+            if (Float.isNaN(percent) || percent < 0) {
+                label.setText("CPU" + coreIndex + " --.-%");
+            } else {
+                label.setText("CPU" + coreIndex + " " + DF1.format(percent) + "%");
+            }
         }
     }
 }

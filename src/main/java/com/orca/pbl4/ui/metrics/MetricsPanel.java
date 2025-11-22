@@ -19,7 +19,7 @@ import java.util.List;
 public class MetricsPanel extends JPanel implements ProcessUpdateListener {
 
     // dùng chung cho mọi chart
-    public static final int MAX_POINTS = 60;        // 60 điểm trên 1 chart
+    public static final int MAX_POINTS = 100;        // 100 điểm trên 1 chart (tăng từ 60 để đường mượt hơn)
     public static final DecimalFormat DF1 = new DecimalFormat("0.0");
     public static final DecimalFormat DF2 = new DecimalFormat("0.00");
 
@@ -29,14 +29,21 @@ public class MetricsPanel extends JPanel implements ProcessUpdateListener {
     private final MemoryChartPanel memChart = new MemoryChartPanel();
     private final NetworkChartPanel netChart = new NetworkChartPanel();
 
-    // state CPU delta
+    // state CPU delta (tổng)
     private long prevCpuTotal = 0;
     private long prevCpuIdle = 0;
+    // state CPU delta (per-core): lưu total ticks và idle ticks cho từng core
+    private long[] prevPerCoreTotal = null;
+    private long[] prevPerCoreIdle = null;
 
     // state Net delta
     private long prevNetRx = 0;
     private long prevNetTx = 0;
     private long prevTimestamp = 0;
+
+    // Timer riêng cho Metrics để sampling nhanh hơn (250-300ms thay vì 1s)
+    private Timer metricsTimer;
+    private ProcessManager processManager;
 
     public MetricsPanel() {
         setLayout(new BorderLayout());
@@ -54,9 +61,31 @@ public class MetricsPanel extends JPanel implements ProcessUpdateListener {
         add(charts, BorderLayout.CENTER);
     }
 
-    // Cho ProcessManager đăng ký listener
+    // Cho ProcessManager đăng ký listener và khởi động timer riêng cho Metrics
     public void attachTo(ProcessManager manager) {
+        this.processManager = manager;
         manager.addUpdateListener(this);
+        
+        // Tạo timer riêng cho Metrics với period 300ms để đường cong mượt hơn
+        // Timer này chỉ refresh snapshot cho Metrics, không ảnh hưởng Process list (vẫn 1s)
+        metricsTimer = new Timer(300, e -> {
+            if (processManager != null && isVisible()) {
+                // refreshSnapshot() sẽ gọi notifyListeners() → onProcessSnapshotUpdated()
+                // Tất cả đều chạy trên EDT hoặc background thread, không block UI
+                processManager.refreshSnapshot();
+            }
+        });
+        metricsTimer.setRepeats(true);
+        metricsTimer.start();
+    }
+
+    /**
+     * Dừng timer khi panel không còn được sử dụng (optional, để tối ưu).
+     */
+    public void stopTimer() {
+        if (metricsTimer != null) {
+            metricsTimer.stop();
+        }
     }
 
     @Override
@@ -73,8 +102,15 @@ public class MetricsPanel extends JPanel implements ProcessUpdateListener {
             int cores = cpu.getCoreCount() > 0 ? cpu.getCoreCount()
                     : Runtime.getRuntime().availableProcessors();
 
-            sidebar.updateCpu(DF1.format(cpuPercent) + "%", cores);
-            cpuChart.addPoint(cpuPercent);
+            // Tính %CPU per-core
+            float[] perCorePercent = computePerCoreCpuPercent(snapshot.getPerCoreCpus());
+            
+            // Cập nhật sidebar với legend per-core
+            sidebar.updateCpuCores(cpuPercent, perCorePercent);
+            
+            // Cập nhật chart per-core
+            cpuChart.setCoreCount(cores);
+            cpuChart.addPerCoreSample(perCorePercent);
 
             // ----- Memory -----
             float memPercent = computeMemPercent(mem);
@@ -105,6 +141,11 @@ public class MetricsPanel extends JPanel implements ProcessUpdateListener {
         });
     }
 
+    /**
+     * Tính %CPU tổng từ delta ticks.
+     * @param cpu CpuInfo tổng từ snapshot
+     * @return %CPU (0-100)
+     */
     private float computeCpuPercent(CpuInfo cpu) {
         long total = cpu.getTotalTicks();
         long idle = cpu.getIdle() + cpu.getIowait();
@@ -119,6 +160,56 @@ public class MetricsPanel extends JPanel implements ProcessUpdateListener {
         prevCpuTotal = total;
         prevCpuIdle = idle;
         return Math.max(0f, Math.min(100f, percent));
+    }
+
+    /**
+     * Tính %CPU cho từng core từ delta ticks.
+     * @param perCoreCpus Danh sách CpuInfo per-core từ snapshot
+     * @return Mảng float[] chứa %CPU của từng core (0-100), length = số core
+     */
+    private float[] computePerCoreCpuPercent(List<CpuInfo> perCoreCpus) {
+        if (perCoreCpus == null || perCoreCpus.isEmpty()) {
+            return new float[0];
+        }
+
+        int coreCount = perCoreCpus.size();
+        float[] perCorePercent = new float[coreCount];
+
+        // Khởi tạo mảng prev nếu chưa có hoặc size khác
+        if (prevPerCoreTotal == null || prevPerCoreTotal.length != coreCount) {
+            prevPerCoreTotal = new long[coreCount];
+            prevPerCoreIdle = new long[coreCount];
+            // Lần đầu chưa có delta, trả về NaN để hiển thị "--.-%"
+            for (int i = 0; i < coreCount; i++) {
+                CpuInfo core = perCoreCpus.get(i);
+                prevPerCoreTotal[i] = core.getTotalTicks();
+                prevPerCoreIdle[i] = core.getIdle() + core.getIowait();
+                perCorePercent[i] = Float.NaN; // Chưa có dữ liệu
+            }
+            return perCorePercent;
+        }
+
+        // Tính delta cho từng core
+        for (int i = 0; i < coreCount; i++) {
+            CpuInfo core = perCoreCpus.get(i);
+            long total = core.getTotalTicks();
+            long idle = core.getIdle() + core.getIowait();
+
+            float percent = 0f;
+            if (prevPerCoreTotal[i] > 0) {
+                long deltaTotal = total - prevPerCoreTotal[i];
+                long deltaIdle = idle - prevPerCoreIdle[i];
+                if (deltaTotal > 0) {
+                    percent = (deltaTotal - deltaIdle) * 100f / deltaTotal;
+                }
+            }
+
+            prevPerCoreTotal[i] = total;
+            prevPerCoreIdle[i] = idle;
+            perCorePercent[i] = Math.max(0f, Math.min(100f, percent));
+        }
+
+        return perCorePercent;
     }
 
     private float computeMemPercent(MemoryInfo mem) {
