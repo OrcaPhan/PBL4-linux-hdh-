@@ -17,7 +17,7 @@ import java.util.Locale;
 public class ProcessTableModel extends AbstractTableModel implements ProcessUpdateListener {
 
     private static final String[] COLUMNS = {
-            "PID", "User", "Name", "CPU %", "MEM %", "RSS", "State", "Nice"
+            "PID", "User", "Name", "CPU %", "MEM %", "RSS", "State", "Priority"
     };
 
     private final ProcessManager manager;

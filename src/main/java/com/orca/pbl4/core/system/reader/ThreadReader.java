@@ -70,7 +70,7 @@ public class ThreadReader {
         String name = (l >= 0 && r > l) ? statContent.substring(l + 1, r) : "?";
         String after = statContent.substring(r + 1).trim();
         String[] rest = after.split("\\s+");
-        
+
         // state ở rest[0], utime ở rest[12] (14th overall), stime ở rest[13] (15th overall)
         char state = rest.length > 0 ? rest[0].charAt(0) : '?';
         long utime = parseLong(rest, 12 - 2); // 14th → index 12 sau khi bỏ (pid,comm)
@@ -98,4 +98,3 @@ public class ThreadReader {
         long cpuTicks;
     }
 }
-

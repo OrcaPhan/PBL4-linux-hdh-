@@ -25,54 +25,161 @@ public class ProcessDetailDialog extends JDialog {
     private static final long PAGE_SIZE_KB = 4; // Page size 4KB
 
     private final ProcessManager manager;
-    private final int pid;
+    private int pid; // Có thể thay đổi nếu tiến trình đang chọn thay đổi
     private ProcessInfo info;
 
     // UI components
     private JPanel infoPanel;
     private JTextArea cmdlineArea;
     private JButton btnKill, btnStop, btnContinue, btnSetNice;
+    
+    // Timer để tự refresh theo tiến trình đang chọn
+    private javax.swing.Timer refreshTimer;
+    private java.util.function.Supplier<Integer> selectedPidSupplier;
 
     public ProcessDetailDialog(ProcessManager manager, int pid) {
+        this(manager, pid, null);
+    }
+
+    /**
+     * Tạo dialog với khả năng tự refresh theo tiến trình đang chọn trên bảng.
+     * @param manager ProcessManager
+     * @param initialPid PID ban đầu
+     * @param selectedPidSupplier Supplier để lấy PID đang được chọn trên bảng (có thể null)
+     */
+    public ProcessDetailDialog(ProcessManager manager, int pid, java.util.function.Supplier<Integer> selectedPidSupplier) {
         super();
         this.manager = manager;
         this.pid = pid;
+        this.selectedPidSupplier = selectedPidSupplier;
         setTitle("Process Detail - PID " + pid);
         setSize(600, 700);
         setLocationRelativeTo(null);
-        setModal(true);
+        setModal(false); // Không modal để có thể tương tác với bảng
 
         loadProcessInfo();
         buildUI();
+        
+        // Tạo timer để tự refresh mỗi 1 giây
+        refreshTimer = new javax.swing.Timer(1000, e -> refreshIfNeeded());
+        refreshTimer.start();
+        
+        // Dừng timer khi đóng dialog
+        addWindowListener(new java.awt.event.WindowAdapter() {
+            @Override
+            public void windowClosing(java.awt.event.WindowEvent e) {
+                if (refreshTimer != null) {
+                    refreshTimer.stop();
+                }
+            }
+        });
     }
 
     private void loadProcessInfo() {
+        // Nếu có supplier, lấy PID đang được chọn trên bảng
+        if (selectedPidSupplier != null) {
+            Integer selectedPid = selectedPidSupplier.get();
+            if (selectedPid != null && selectedPid > 0) {
+                pid = selectedPid;
+            }
+        }
+        
         info = manager.getProcessDetail(pid);
         if (info == null) {
+            // Process không còn tồn tại, đóng dialog
+            if (refreshTimer != null) {
+                refreshTimer.stop();
+            }
             JOptionPane.showMessageDialog(this,
                     "Process with PID " + pid + " not found or cannot be accessed.",
-                    "Error", JOptionPane.ERROR_MESSAGE);
+                    "Process Not Found", JOptionPane.INFORMATION_MESSAGE);
             dispose();
         }
+    }
+    
+    /**
+     * Refresh thông tin nếu cần (khi PID thay đổi hoặc định kỳ).
+     */
+    private void refreshIfNeeded() {
+        SwingUtilities.invokeLater(() -> {
+            // Kiểm tra PID đang được chọn trên bảng (nếu có supplier)
+            if (selectedPidSupplier != null) {
+                Integer selectedPid = selectedPidSupplier.get();
+                if (selectedPid != null && selectedPid > 0 && selectedPid != pid) {
+                    // PID đã thay đổi, load lại với PID mới
+                    pid = selectedPid;
+                    loadProcessInfo();
+                    if (info != null) {
+                        updateInfoPanel();
+                        setTitle("Process Detail - PID " + pid);
+                    }
+                    return;
+                }
+            }
+            
+            // PID không đổi, chỉ refresh thông tin hiện tại
+            ProcessInfo newInfo = manager.getProcessDetail(pid);
+            if (newInfo == null) {
+                // Process không còn tồn tại
+                loadProcessInfo(); // Sẽ đóng dialog
+                return;
+            }
+            
+            // So sánh các field quan trọng để quyết định có cần update không
+            boolean needsUpdate = info == null;
+            if (!needsUpdate) {
+                // So sánh các field có thể thay đổi
+                Float oldCpu = info.getCpuPercent();
+                Float newCpu = newInfo.getCpuPercent();
+                Float oldMem = info.getMemoryPercent();
+                Float newMem = newInfo.getMemoryPercent();
+                
+                needsUpdate = (oldCpu == null && newCpu != null) || 
+                             (oldCpu != null && !oldCpu.equals(newCpu)) ||
+                             (oldMem == null && newMem != null) ||
+                             (oldMem != null && !oldMem.equals(newMem)) ||
+                             info.getProcCpuTicks() != newInfo.getProcCpuTicks() ||
+                             info.getRssPages() != newInfo.getRssPages() ||
+                             !safe(info.getState(), "").equals(safe(newInfo.getState(), ""));
+            }
+            
+            if (needsUpdate) {
+                info = newInfo;
+                updateInfoPanel();
+                setTitle("Process Detail - PID " + pid);
+            }
+        });
+    }
+    
+    /**
+     * Cập nhật lại infoPanel với thông tin mới.
+     */
+    private void updateInfoPanel() {
+        infoPanel.removeAll();
+        fillInfoPanel();
+        infoPanel.revalidate();
+        infoPanel.repaint();
     }
 
     private void buildUI() {
         setLayout(new BorderLayout(8, 8));
-//        setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
         ((JComponent) getContentPane())
                 .setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
 
         // Scroll pane cho thông tin chính
         infoPanel = new JPanel(new GridBagLayout());
         infoPanel.setBorder(BorderFactory.createTitledBorder("Process Information"));
+        infoPanel.setBackground(Color.WHITE);
         fillInfoPanel();
 
         JScrollPane scrollPane = new JScrollPane(infoPanel);
         scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+        scrollPane.setBorder(BorderFactory.createLineBorder(new Color(0xD0D0D0)));
         add(scrollPane, BorderLayout.CENTER);
 
         // Panel nút thao tác
         JPanel buttonPanel = createButtonPanel();
+        buttonPanel.setBackground(Color.WHITE);
         add(buttonPanel, BorderLayout.SOUTH);
     }
 
@@ -93,18 +200,28 @@ public class ProcessDetailDialog extends JDialog {
         // State
         addInfoRow("State:", formatState(info.getState()), gbc, row++);
 
-        // CPU%
-        float cpuPercent = info.getCpuPercent() != null ? info.getCpuPercent() : 0f;
-        addInfoRow("CPU %:", String.format(Locale.US, "%.2f%%", cpuPercent), gbc, row++);
+        // CPU% - hiển thị giá trị hoặc "N/A" nếu null
+        if (info.getCpuPercent() != null) {
+            float cpuPercent = info.getCpuPercent();
+            addInfoRow("CPU %:", String.format(Locale.US, "%.1f%%", cpuPercent), gbc, row++);
+        } else {
+            // Hiển thị "N/A" nếu không có giá trị
+            addInfoRow("CPU %:", "N/A", gbc, row++);
+        }
 
         // CPU time (từ procCpuTicks)
         double cpuTimeSeconds = info.getProcCpuTicks() / (double) HZ;
         String cpuTimeStr = formatTime(cpuTimeSeconds);
         addInfoRow("CPU time:", cpuTimeStr, gbc, row++);
 
-        // Memory %
-        float memPercent = info.getMemoryPercent() != null ? info.getMemoryPercent() : 0f;
-        addInfoRow("Memory (%):", String.format(Locale.US, "%.2f%%", memPercent), gbc, row++);
+        // Memory % - hiển thị giá trị hoặc "N/A" nếu null
+        if (info.getMemoryPercent() != null) {
+            float memPercent = info.getMemoryPercent();
+            addInfoRow("Memory %:", String.format(Locale.US, "%.1f%%", memPercent), gbc, row++);
+        } else {
+            // Hiển thị "N/A" nếu không có giá trị
+            addInfoRow("Memory %:", "N/A", gbc, row++);
+        }
 
         // RSS
         long rssKB = info.getRssPages() * PAGE_SIZE_KB;
@@ -196,28 +313,38 @@ public class ProcessDetailDialog extends JDialog {
 
         btnKill = new JButton("Kill");
         btnKill.addActionListener(e -> handleKill());
+        ProcessTableStyleUtil.applyButtonStyle(btnKill);
         panel.add(btnKill);
 
         btnStop = new JButton("Stop");
         btnStop.addActionListener(e -> handleStop());
+        ProcessTableStyleUtil.applyButtonStyle(btnStop);
         panel.add(btnStop);
 
         btnContinue = new JButton("Continue");
         btnContinue.addActionListener(e -> handleContinue());
+        ProcessTableStyleUtil.applyButtonStyle(btnContinue);
         panel.add(btnContinue);
 
-        btnSetNice = new JButton("Set Nice...");
-        btnSetNice.addActionListener(e -> handleSetNice());
+        btnSetNice = new JButton("Change Priority...");
+        btnSetNice.addActionListener(e -> handleSetPriority());
+        ProcessTableStyleUtil.applyButtonStyle(btnSetNice);
         panel.add(btnSetNice);
 
         JButton btnClose = new JButton("Close");
         btnClose.addActionListener(e -> dispose());
+        ProcessTableStyleUtil.applyButtonStyle(btnClose);
         panel.add(btnClose);
 
         return panel;
     }
 
     private void handleKill() {
+        // Hỏi mật khẩu trước khi kill
+        if (!requirePassword("Kill")) {
+            return;
+        }
+        
         if (confirmAction("Kill", "Are you sure you want to kill this process?")) {
             if (manager.killProcess(pid)) {
                 JOptionPane.showMessageDialog(this, "Process killed successfully.", "Success", JOptionPane.INFORMATION_MESSAGE);
@@ -227,6 +354,18 @@ public class ProcessDetailDialog extends JDialog {
                 JOptionPane.showMessageDialog(this, "Failed to kill process. You may not have permission.", "Error", JOptionPane.ERROR_MESSAGE);
             }
         }
+    }
+    
+    /**
+     * Hỏi mật khẩu để thực hiện action.
+     */
+    private boolean requirePassword(String action) {
+        JPanel panel = new JPanel(new BorderLayout(6, 6));
+        panel.add(new JLabel("Enter password to " + action.toLowerCase() + " PID " + pid), BorderLayout.NORTH);
+        JPasswordField passwordField = new JPasswordField();
+        panel.add(passwordField, BorderLayout.CENTER);
+        int result = JOptionPane.showConfirmDialog(this, panel, "Authentication Required", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        return result == JOptionPane.OK_OPTION && passwordField.getPassword().length > 0;
     }
 
     private void handleStop() {
@@ -251,38 +390,90 @@ public class ProcessDetailDialog extends JDialog {
         }
     }
 
-    private void handleSetNice() {
-        String input = JOptionPane.showInputDialog(this,
-                "Enter new nice value (-20 to 19):",
-                "Set Nice",
-                JOptionPane.QUESTION_MESSAGE);
-        if (input == null) return; // User cancelled
-
-        try {
-            int niceValue = Integer.parseInt(input.trim());
-            if (niceValue < -20 || niceValue > 19) {
-                JOptionPane.showMessageDialog(this,
-                        "Nice value must be between -20 and 19.",
-                        "Invalid Input", JOptionPane.ERROR_MESSAGE);
-                return;
+    /**
+     * Hiển thị dialog chọn priority với combo box.
+     */
+    private void handleSetPriority() {
+        // Tạo combo box với các mức priority
+        String[] priorities = {
+            "Very High",
+            "High",
+            "Above Normal",
+            "Normal",
+            "Below Normal",
+            "Low",
+            "Very Low"
+        };
+        
+        // Lấy priority hiện tại từ process info
+        String currentPriority = info != null && info.getPriority() != 0
+            ? resolvePriorityFromNice(info.getNice()) 
+            : "Normal";
+        
+        JComboBox<String> comboBox = new JComboBox<>(priorities);
+        comboBox.setSelectedItem(currentPriority);
+        comboBox.setFont(new Font("SansSerif", Font.PLAIN, 12));
+        
+        JPanel panel = new JPanel(new BorderLayout(10, 10));
+        panel.add(new JLabel("Select priority level:"), BorderLayout.NORTH);
+        panel.add(comboBox, BorderLayout.CENTER);
+        panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        
+        int result = JOptionPane.showConfirmDialog(
+            this,
+            panel,
+            "Change Priority",
+            JOptionPane.OK_CANCEL_OPTION,
+            JOptionPane.PLAIN_MESSAGE
+        );
+        
+        if (result == JOptionPane.OK_OPTION) {
+            String selectedPriority = (String) comboBox.getSelectedItem();
+            if (selectedPriority != null) {
+                int niceValue = mapPriorityToNice(selectedPriority);
+                
+                if (manager.reniceProcess(pid, niceValue)) {
+                    JOptionPane.showMessageDialog(this,
+                            "Priority changed to " + selectedPriority + " successfully.",
+                            "Success", JOptionPane.INFORMATION_MESSAGE);
+                    manager.refreshSnapshot();
+                    refreshInfo();
+                } else {
+                    JOptionPane.showMessageDialog(this,
+                            "Failed to change priority. You may not have permission.",
+                            "Error", JOptionPane.ERROR_MESSAGE);
+                }
             }
-
-            if (manager.reniceProcess(pid, niceValue)) {
-                JOptionPane.showMessageDialog(this,
-                        "Nice value set successfully.",
-                        "Success", JOptionPane.INFORMATION_MESSAGE);
-                manager.refreshSnapshot();
-                refreshInfo();
-            } else {
-                JOptionPane.showMessageDialog(this,
-                        "Failed to set nice value. You may not have permission.",
-                        "Error", JOptionPane.ERROR_MESSAGE);
-            }
-        } catch (NumberFormatException e) {
-            JOptionPane.showMessageDialog(this,
-                    "Invalid number format.",
-                    "Error", JOptionPane.ERROR_MESSAGE);
         }
+    }
+    
+    /**
+     * Map priority string sang nice value.
+     */
+    private int mapPriorityToNice(String priority) {
+        return switch (priority) {
+            case "Very High" -> -15;
+            case "High" -> -10;
+            case "Above Normal" -> -5;
+            case "Normal" -> 0;
+            case "Below Normal" -> 5;
+            case "Low" -> 10;
+            case "Very Low" -> 15;
+            default -> 0;
+        };
+    }
+    
+    /**
+     * Resolve priority string từ nice value (để hiển thị trong combo box).
+     */
+    private String resolvePriorityFromNice(int nice) {
+        if (nice <= -15) return "Very High";
+        if (nice <= -10) return "High";
+        if (nice < 0) return "Above Normal";
+        if (nice == 0) return "Normal";
+        if (nice <= 5) return "Below Normal";
+        if (nice <= 10) return "Low";
+        return "Very Low";
     }
 
     private boolean confirmAction(String action, String message) {
@@ -296,10 +487,7 @@ public class ProcessDetailDialog extends JDialog {
     private void refreshInfo() {
         loadProcessInfo();
         if (info != null) {
-            infoPanel.removeAll();
-            fillInfoPanel();
-            infoPanel.revalidate();
-            infoPanel.repaint();
+            updateInfoPanel();
         }
     }
 
