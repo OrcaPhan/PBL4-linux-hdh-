@@ -20,10 +20,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 
-/**
- * Triển khai mặc định dựa trên SystemMonitor + snapshot từ /proc.
- * TODO: triển khai đầy đủ logic đọc snapshot, tính delta CPU/IO, smoothing EMA và thao tác tiến trình.
- */
 public class DefaultProcessManager implements ProcessManager {
 
     private static final float ALPHA = 0.3f;
@@ -53,42 +49,6 @@ public class DefaultProcessManager implements ProcessManager {
         currentSnapshot = fresh;
         cachedRows = Collections.unmodifiableList(buildRows(prev, fresh));
         notifyListeners();
-    }
-
-    @Override
-    public synchronized List<ProcessRow> getAllProcesses() {
-        return cachedRows;
-    }
-
-    @Override
-    public synchronized List<ProcessRow> queryProcesses(ProcessQuery query) {
-        List<ProcessRow> base = cachedRows;
-        if (query == null) return base;
-
-        List<ProcessRow> filtered = new ArrayList<>();
-        String search = normalize(query.getSearchText());
-        ProcessFilter filter = query.getFilter();
-        String stateFilter = normalize(query.getStateFilter());
-        Set<Character> states = new HashSet<>();
-        if (stateFilter != null && !"all".equals(stateFilter)) {
-            for (char c : stateFilter.toCharArray()) states.add(Character.toUpperCase(c));
-        }
-        if (filter != null && filter.getStates() != null) {
-            states.addAll(filter.getStates());
-        }
-
-        for (ProcessRow row : base) {
-            if (!matchesSearch(row, search)) continue;
-            if (!states.isEmpty() && !states.contains(Character.toUpperCase(row.getState()))) continue;
-            if (filter != null && !filter.matchesUser(row.getUser())) continue;
-            filtered.add(row);
-        }
-
-        Comparator<ProcessRow> cmp = makeComparator(query.getSortKey());
-        if (cmp != null) {
-            filtered.sort(query.isDescending() ? cmp.reversed() : cmp);
-        }
-        return filtered;
     }
 
     @Override
@@ -267,10 +227,19 @@ public class DefaultProcessManager implements ProcessManager {
         };
     }
 
+    private final ProcessSignalService signalService = new ProcessSignalService();
+
+    public ProcessSignalService getSignalService() {
+        return signalService;
+    }
+
     private boolean sendSignal(int pid, String signal) {
         try {
-            new ProcessBuilder("kill", "-" + signal, String.valueOf(pid)).start().waitFor();
-            return true;
+            ProcessBuilder pb = new ProcessBuilder("kill", "-" + signal, String.valueOf(pid));
+            pb.redirectErrorStream(true);
+            Process process = pb.start();
+            int exitCode = process.waitFor();
+            return exitCode == 0;
         } catch (Exception ex) {
             return false;
         }

@@ -14,7 +14,6 @@ public class MetricsSidebarPanel extends JPanel {
 
     private final JLabel lblCpuPercent = new JLabel("0.0%");
     private final JLabel lblCpuCores = new JLabel("0 cores");
-    // Panel chứa legend per-core (CPU1, CPU2, ...)
     private final JPanel cpuLegendPanel = new JPanel();
     private final List<CoreLegendItem> coreLegendItems = new ArrayList<>();
 
@@ -29,7 +28,6 @@ public class MetricsSidebarPanel extends JPanel {
     private MemoryInfo lastMem;
     private float lastMemPercent;
 
-    // cho cùng package dùng được (MetricsSidebarPanel)
     static final Color[] CORE_COLORS = {
             new Color(0xFF0000),
             new Color(0xFB8C00),
@@ -113,17 +111,6 @@ public class MetricsSidebarPanel extends JPanel {
         return l;
     }
 
-    // ==== update từ MetricsPanel ====
-    public void updateCpu(String percentText, int cores) {
-        lblCpuPercent.setText(percentText);
-        lblCpuCores.setText(cores + " cores");
-    }
-
-    /**
-     * Cập nhật CPU với legend per-core.
-     * @param totalPercent %CPU tổng (0-100)
-     * @param perCorePercent Mảng %CPU của từng core (0-100), có thể null hoặc rỗng
-     */
     public void updateCpuCores(float totalPercent, float[] perCorePercent) {
         lblCpuPercent.setText(DF1.format(totalPercent) + "%");
         
@@ -174,7 +161,7 @@ public class MetricsSidebarPanel extends JPanel {
         lblNetUp.setText(up);
     }
 
-    // ==== RAM gauge ====
+    //  RAM gauge
     private class MemoryGaugePanel extends JPanel {
         MemoryGaugePanel() {
             setPreferredSize(new Dimension(140, 90));
@@ -255,10 +242,7 @@ public class MetricsSidebarPanel extends JPanel {
         }
     }
 
-    // ==== Core Legend Item ====
-    /**
-     * Một dòng legend cho một core (◼ CPU1 23.4%).
-     */
+    //  Core Legend Item
     private static class CoreLegendItem extends JPanel {
         private final int coreIndex;
         private final JLabel colorBox = new JLabel();

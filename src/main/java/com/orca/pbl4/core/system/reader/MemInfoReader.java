@@ -18,7 +18,6 @@ public class MemInfoReader {
         List<String> lines = proc.readLines("meminfo");
         Map<String, Long> map = new HashMap<>();
         for (String line : lines) {
-// Ví dụ: MemTotal: 16266392 kB
             int colon = line.indexOf(':');
             if (colon < 0) continue;
             String key = line.substring(0, colon).trim();

@@ -11,9 +11,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-/**
- * TableModel hiển thị tiến trình. Lắng nghe sự kiện từ ProcessManager.
- */
+
 public class ProcessTableModel extends AbstractTableModel implements ProcessUpdateListener {
 
     private static final String[] COLUMNS = {
@@ -50,14 +48,6 @@ public class ProcessTableModel extends AbstractTableModel implements ProcessUpda
             descending = true;
         }
         applyTransform();
-    }
-
-    public ProcessSortKey getSortKey() {
-        return sortKey;
-    }
-
-    public boolean isDescending() {
-        return descending;
     }
 
     @Override

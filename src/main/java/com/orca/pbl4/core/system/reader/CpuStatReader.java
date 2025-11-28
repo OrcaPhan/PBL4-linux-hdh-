@@ -5,10 +5,6 @@ import com.orca.pbl4.core.model.CpuInfo;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Đọc thông tin CPU từ /proc/stat.
- * Hỗ trợ đọc CPU tổng (dòng "cpu ") và per-core (các dòng "cpu0", "cpu1", ...).
- */
 public class CpuStatReader {
     private final ProcFs proc;
 
@@ -20,10 +16,6 @@ public class CpuStatReader {
         this.proc = proc;
     }
 
-    /**
-     * Đọc CPU tổng từ dòng "cpu " trong /proc/stat.
-     * @return CpuInfo chứa ticks tổng của toàn hệ thống
-     */
     public CpuInfo read(){
         List<String> lines = proc.readLines("stat");
         String cpuLine = null;
@@ -61,17 +53,11 @@ public class CpuStatReader {
         return info;
     }
 
-    /**
-     * Đọc danh sách CPU per-core từ các dòng "cpu0", "cpu1", ... trong /proc/stat.
-     * @return Danh sách CpuInfo, mỗi phần tử tương ứng với một core (theo thứ tự cpu0, cpu1, ...)
-     */
     public List<CpuInfo> readPerCore(){
         List<String> lines = proc.readLines("stat");
         List<CpuInfo> cores = new ArrayList<>();
 
         for(String line : lines){
-            // Chỉ lấy các dòng bắt đầu bằng "cpu" và có số ngay sau "cpu" (cpu0, cpu1, ...)
-            // Không lấy "cpu " (tổng) vì có space sau "cpu"
             if(line.startsWith("cpu") && !line.startsWith("cpu ") && line.length() > 3){
                 // Kiểm tra ký tự thứ 3 (sau "cpu") là số
                 if(Character.isDigit(line.charAt(3))){

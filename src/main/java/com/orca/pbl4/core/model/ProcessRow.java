@@ -10,7 +10,7 @@ public class ProcessRow {
     private String diskRead;     // Lượng đọc (vd: "34.6 MB")
     private String diskWrite;    // Lượng ghi (vd: "1.1 GB")
     private String priority;     // "Normal", "Low", "Very Low", ...
-    private char state;          // R/S/D/T/Z/I (nếu muốn hiển thị 1 ký tự)
+    private char state;          // R/S/D/T/Z/I
 
     public ProcessRow() {}
     public int getPid() {

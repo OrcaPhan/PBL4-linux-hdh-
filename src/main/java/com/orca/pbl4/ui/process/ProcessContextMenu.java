@@ -4,10 +4,7 @@ import javax.swing.JMenuItem;
 import javax.swing.JPopupMenu;
 import java.util.function.Consumer;
 
-/**
- * Context menu cho bảng tiến trình.
- * Hiển thị khi click chuột phải: Kill, Stop, Continue, Renice, Properties.
- */
+
 public class ProcessContextMenu extends JPopupMenu {
 
     public ProcessContextMenu(Consumer<ProcessAction> actionConsumer) {

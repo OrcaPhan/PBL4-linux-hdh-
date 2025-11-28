@@ -5,24 +5,13 @@ import com.orca.pbl4.core.model.*;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Snapshot của hệ thống tại một thời điểm.
- * Chứa raw data từ /proc (chưa tính %).
- */
 public class SystemSnapshot {
-    /** CPU tổng (từ dòng "cpu " trong /proc/stat) */
     private CpuInfo cpu;
-    /** Danh sách CPU per-core (từ các dòng "cpu0", "cpu1", ... trong /proc/stat) */
     private List<CpuInfo> perCoreCpus;
-    /** Memory info (từ /proc/meminfo) */
     private MemoryInfo memory;
-    /** Disk tổng (aggregate sectors từ /proc/diskstats) */
     private DiskInfo diskTotal;
-    /** Network tổng (aggregate rx/tx bytes từ /proc/net/dev) */
     private NetworkInfo netTotal;
-    /** Danh sách tiến trình (raw, chưa tính %CPU) */
     private List<ProcessInfo> processes;
-    /** Thời điểm lấy snapshot (System.nanoTime) */
     private long collectedAtNanos;
 
 
@@ -46,10 +35,6 @@ public class SystemSnapshot {
     public CpuInfo getCpu() { return cpu; }
     public void setCpu(CpuInfo cpu) { this.cpu = cpu; }
 
-    /**
-     * Lấy danh sách CPU per-core.
-     * @return Danh sách CpuInfo, mỗi phần tử là một core (theo thứ tự cpu0, cpu1, ...)
-     */
     public List<CpuInfo> getPerCoreCpus() { return perCoreCpus; }
     public void setPerCoreCpus(List<CpuInfo> perCoreCpus) { 
         this.perCoreCpus = perCoreCpus != null ? perCoreCpus : new ArrayList<>();

@@ -6,10 +6,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-/**
- * Đọc thông tin threads từ /proc/<pid>/task.
- * Mỗi thread có thư mục /proc/<pid>/task/<tid>/ với file stat tương tự /proc/<pid>/stat.
- */
 public class ThreadReader {
     private final ProcFs proc;
 
@@ -21,11 +17,6 @@ public class ThreadReader {
         this.proc = proc;
     }
 
-    /**
-     * Đọc danh sách threads của một process.
-     * @param pid Process ID
-     * @return Danh sách ThreadInfo, mỗi phần tử là một thread
-     */
     public List<ThreadInfo> readThreads(int pid) {
         List<Integer> tids;
         try {
@@ -44,12 +35,6 @@ public class ThreadReader {
         return threads;
     }
 
-    /**
-     * Đọc thông tin một thread cụ thể.
-     * @param pid Process ID
-     * @param tid Thread ID
-     * @return ThreadInfo hoặc null nếu không đọc được
-     */
     private ThreadInfo readThread(int pid, int tid) {
         try {
             String stat = proc.readString(String.valueOf(pid), "task", String.valueOf(tid), "stat");
@@ -60,10 +45,6 @@ public class ThreadReader {
         }
     }
 
-    /**
-     * Parse /proc/<pid>/task/<tid>/stat tương tự parseStat trong ProcReader.
-     * Format: pid (comm) state ... utime(14) stime(15) ...
-     */
     private static ParsedThreadStat parseThreadStat(String statContent, int tid) {
         int l = statContent.indexOf('(');
         int r = statContent.lastIndexOf(')');

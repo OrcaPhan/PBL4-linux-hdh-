@@ -8,10 +8,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.function.Consumer;
 
-/**
- * Thanh công cụ điều khiển bảng tiến trình.
- * Bao gồm: Search, Refresh, Metrics buttons và status bar.
- */
+
 public class ProcessToolbarPanel extends JPanel {
 
     private final JTextField txtSearch = new JTextField(20);
@@ -84,12 +81,6 @@ public class ProcessToolbarPanel extends JPanel {
         updateStatus(0, null, null);
     }
 
-    /**
-     * Cập nhật status bar với thông tin mới nhất.
-     * @param processCount Số lượng tiến trình
-     * @param maxCpuPid PID có %CPU cao nhất (có thể null)
-     * @param maxMemPid PID có %MEM cao nhất (có thể null)
-     */
     public void updateStatus(int processCount, Integer maxCpuPid, Integer maxMemPid) {
         String dateTime = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
         StringBuilder sb = new StringBuilder();

@@ -30,31 +30,18 @@ public class Sampler {
         this.procReader = procReader;
     }
 
-
     public CpuInfo readCpu() { return cpuReader.read(); }
-
 
     public MemoryInfo readMemory() { return memReader.read(); }
 
-
-    /** Đọc tổng DiskInfo (aggregate sectors). Nếu cần per-device hãy mở rộng DiskReader + model. */
     public DiskInfo readDiskTotal() { return diskReader.readTotal(); }
 
-
-    /** Đọc tổng NetworkInfo (aggregate bytes). Nếu cần per-iface hãy mở rộng NetReader + model. */
     public NetworkInfo readNetTotal() { return netReader.readTotal(); }
 
-
-    /**
-     * Đọc danh sách tiến trình (raw). withCmdline=false để nhanh hơn cho lần quét nền.
-     * Khi UI mở chi tiết tiến trình, service có thể gọi lại ProcReader để lấy cmdline/threads/handles.
-     */
     public List<ProcessInfo> readProcesses(boolean withCmdline) {
         return procReader.readAll(withCmdline);
     }
 
-
-    /** Lấy đầy đủ một mẫu hệ thống (raw) tại thời điểm gọi. */
     public SystemSnapshot readAll(boolean withCmdline) {
         CpuInfo cpu = readCpu();
         List<CpuInfo> perCoreCpus = cpuReader.readPerCore();
@@ -67,7 +54,6 @@ public class Sampler {
         return snapshot;
     }
 
-    /** Lấy ProcReader để đọc chi tiết process khi cần. */
     public ProcReader getProcReader() {
         return procReader;
     }

@@ -30,7 +30,6 @@ public class HandleReader {
             try { target = proc.readSymlinkTarget(String.valueOf(pid), "fd", fdName); }
             catch (Exception e) { continue; }
             HandleInfo hi = new HandleInfo(fd,inferType(target),target);
-//            hi.setFlags(""); // /proc không cung cấp flags trực tiếp, để trống hoặc mở rộng qua /proc/<pid>/fdinfo
             out.add(hi);
         }
         return out;

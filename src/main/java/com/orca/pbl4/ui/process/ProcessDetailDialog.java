@@ -3,7 +3,9 @@ package com.orca.pbl4.ui.process;
 import com.orca.pbl4.core.model.HandleInfo;
 import com.orca.pbl4.core.model.ProcessInfo;
 import com.orca.pbl4.core.model.ThreadInfo;
+import com.orca.pbl4.service.process.DefaultProcessManager;
 import com.orca.pbl4.service.process.ProcessManager;
+import com.orca.pbl4.service.process.ProcessSignalService;
 
 import javax.swing.*;
 import java.awt.*;
@@ -15,10 +17,6 @@ import java.time.ZoneId;
 import java.util.List;
 import java.util.Locale;
 
-/**
- * Dialog hiển thị chi tiết đầy đủ của một tiến trình.
- * Đọc dữ liệu từ /proc qua ProcessManager.getProcessDetail().
- */
 public class ProcessDetailDialog extends JDialog {
 
     private static final long HZ = 100; // Clock ticks per second (thường là 100 trên Linux)
@@ -28,25 +26,14 @@ public class ProcessDetailDialog extends JDialog {
     private int pid; // Có thể thay đổi nếu tiến trình đang chọn thay đổi
     private ProcessInfo info;
 
-    // UI components
     private JPanel infoPanel;
     private JTextArea cmdlineArea;
     private JButton btnKill, btnStop, btnContinue, btnSetNice;
     
-    // Timer để tự refresh theo tiến trình đang chọn
+
     private javax.swing.Timer refreshTimer;
     private java.util.function.Supplier<Integer> selectedPidSupplier;
 
-    public ProcessDetailDialog(ProcessManager manager, int pid) {
-        this(manager, pid, null);
-    }
-
-    /**
-     * Tạo dialog với khả năng tự refresh theo tiến trình đang chọn trên bảng.
-     * @param manager ProcessManager
-     * @param initialPid PID ban đầu
-     * @param selectedPidSupplier Supplier để lấy PID đang được chọn trên bảng (có thể null)
-     */
     public ProcessDetailDialog(ProcessManager manager, int pid, java.util.function.Supplier<Integer> selectedPidSupplier) {
         super();
         this.manager = manager;
@@ -96,10 +83,7 @@ public class ProcessDetailDialog extends JDialog {
             dispose();
         }
     }
-    
-    /**
-     * Refresh thông tin nếu cần (khi PID thay đổi hoặc định kỳ).
-     */
+
     private void refreshIfNeeded() {
         SwingUtilities.invokeLater(() -> {
             // Kiểm tra PID đang được chọn trên bảng (nếu có supplier)
@@ -150,10 +134,7 @@ public class ProcessDetailDialog extends JDialog {
             }
         });
     }
-    
-    /**
-     * Cập nhật lại infoPanel với thông tin mới.
-     */
+
     private void updateInfoPanel() {
         infoPanel.removeAll();
         fillInfoPanel();
@@ -340,59 +321,97 @@ public class ProcessDetailDialog extends JDialog {
     }
 
     private void handleKill() {
-        // Hỏi mật khẩu trước khi kill
-        if (!requirePassword("Kill")) {
+        if (!confirmAction("Kill", "Are you sure you want to kill this process?")) {
             return;
         }
         
-        if (confirmAction("Kill", "Are you sure you want to kill this process?")) {
-            if (manager.killProcess(pid)) {
-                JOptionPane.showMessageDialog(this, "Process killed successfully.", "Success", JOptionPane.INFORMATION_MESSAGE);
-                manager.refreshSnapshot();
-                dispose();
-            } else {
-                JOptionPane.showMessageDialog(this, "Failed to kill process. You may not have permission.", "Error", JOptionPane.ERROR_MESSAGE);
-            }
-        }
-    }
-    
-    /**
-     * Hỏi mật khẩu để thực hiện action.
-     */
-    private boolean requirePassword(String action) {
-        JPanel panel = new JPanel(new BorderLayout(6, 6));
-        panel.add(new JLabel("Enter password to " + action.toLowerCase() + " PID " + pid), BorderLayout.NORTH);
-        JPasswordField passwordField = new JPasswordField();
-        panel.add(passwordField, BorderLayout.CENTER);
-        int result = JOptionPane.showConfirmDialog(this, panel, "Authentication Required", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
-        return result == JOptionPane.OK_OPTION && passwordField.getPassword().length > 0;
+        // Kiểm tra xem có cần root không
+        boolean requireRoot = shouldRequireRoot();
+        sendSignalAsync(pid, "TERM", requireRoot, "Kill", () -> {
+            manager.refreshSnapshot();
+            dispose();
+        });
     }
 
     private void handleStop() {
-        if (confirmAction("Stop", "Are you sure you want to stop this process?")) {
-            if (manager.stopProcess(pid)) {
-                JOptionPane.showMessageDialog(this, "Process stopped successfully.", "Success", JOptionPane.INFORMATION_MESSAGE);
-                manager.refreshSnapshot();
-                refreshInfo();
-            } else {
-                JOptionPane.showMessageDialog(this, "Failed to stop process. You may not have permission.", "Error", JOptionPane.ERROR_MESSAGE);
-            }
+        if (!confirmAction("Stop", "Are you sure you want to stop this process?")) {
+            return;
         }
+        
+        boolean requireRoot = shouldRequireRoot();
+        sendSignalAsync(pid, "STOP", requireRoot, "Stop", () -> {
+            manager.refreshSnapshot();
+            refreshInfo();
+        });
     }
 
     private void handleContinue() {
-        if (manager.continueProcess(pid)) {
-            JOptionPane.showMessageDialog(this, "Process continued successfully.", "Success", JOptionPane.INFORMATION_MESSAGE);
+        boolean requireRoot = shouldRequireRoot();
+        sendSignalAsync(pid, "CONT", requireRoot, "Continue", () -> {
             manager.refreshSnapshot();
             refreshInfo();
-        } else {
-            JOptionPane.showMessageDialog(this, "Failed to continue process. You may not have permission.", "Error", JOptionPane.ERROR_MESSAGE);
-        }
+        });
     }
 
-    /**
-     * Hiển thị dialog chọn priority với combo box.
-     */
+    private void sendSignalAsync(int pid, String signal, boolean requireRoot, String actionName, Runnable onSuccess) {
+        ProcessSignalService signalService = getSignalService();
+        if (signalService == null) {
+            // Fallback: dùng method cũ
+            boolean success = switch (signal) {
+                case "TERM", "KILL" -> manager.killProcess(pid);
+                case "STOP" -> manager.stopProcess(pid);
+                case "CONT" -> manager.continueProcess(pid);
+                default -> false;
+            };
+            if (success) {
+                if (onSuccess != null) onSuccess.run();
+            } else {
+                showError(actionName, "Failed to " + actionName.toLowerCase() + " process. Permission denied or process not found.");
+            }
+            return;
+        }
+
+        signalService.sendSignal(pid, signal, requireRoot, result -> {
+            switch (result) {
+                case SUCCESS -> {
+                    if (onSuccess != null) onSuccess.run();
+                }
+                case PERMISSION_DENIED -> {
+                    showError(actionName, "Permission denied. You may need root privileges to " + actionName.toLowerCase() + " this process.");
+                }
+                case PROCESS_NOT_FOUND -> {
+                    showError(actionName, "Process not found. It may have already terminated.");
+                }
+                case USER_CANCELLED -> {
+                    showError(actionName, actionName + " failed: authentication cancelled or wrong password.");
+                }
+                case UNKNOWN_ERROR -> {
+                    showError(actionName, "Unknown error while sending signal.");
+                }
+            }
+        });
+    }
+
+    private ProcessSignalService getSignalService() {
+        if (manager instanceof DefaultProcessManager) {
+            return ((DefaultProcessManager) manager).getSignalService();
+        }
+        return null;
+    }
+
+    private boolean shouldRequireRoot() {
+        if (info == null) return false;
+        String user = info.getUser();
+        if (user == null) return false;
+        String currentUser = System.getProperty("user.name");
+        // Nếu process thuộc user khác hoặc root thì có thể cần quyền root
+        return !user.equals(currentUser) || "root".equals(user);
+    }
+
+    private void showError(String title, String message) {
+        JOptionPane.showMessageDialog(this, message, title + " Error", JOptionPane.ERROR_MESSAGE);
+    }
+
     private void handleSetPriority() {
         // Tạo combo box với các mức priority
         String[] priorities = {
@@ -431,25 +450,54 @@ public class ProcessDetailDialog extends JDialog {
             String selectedPriority = (String) comboBox.getSelectedItem();
             if (selectedPriority != null) {
                 int niceValue = mapPriorityToNice(selectedPriority);
+                boolean requireRoot = shouldRequireRoot();
                 
-                if (manager.reniceProcess(pid, niceValue)) {
-                    JOptionPane.showMessageDialog(this,
-                            "Priority changed to " + selectedPriority + " successfully.",
-                            "Success", JOptionPane.INFORMATION_MESSAGE);
-                    manager.refreshSnapshot();
-                    refreshInfo();
+                ProcessSignalService signalService = getSignalService();
+                if (signalService != null) {
+                    signalService.reniceAsync(pid, niceValue, requireRoot, r -> {
+                        switch (r) {
+                            case SUCCESS -> {
+                                JOptionPane.showMessageDialog(this,
+                                    "Priority changed to " + selectedPriority + " successfully.",
+                                    "Success", JOptionPane.INFORMATION_MESSAGE);
+                                manager.refreshSnapshot();
+                                refreshInfo();
+                            }
+                            case PERMISSION_DENIED -> {
+                                showError("Change Priority",
+                                    "Permission denied. You may need root privileges.");
+                            }
+                            case USER_CANCELLED -> {
+                                showError("Change Priority",
+                                    "Change priority cancelled or wrong password.");
+                            }
+                            case PROCESS_NOT_FOUND -> {
+                                showError("Change Priority",
+                                    "Process not found. It may have already terminated.");
+                            }
+                            case UNKNOWN_ERROR -> {
+                                showError("Change Priority",
+                                    "Unknown error while changing priority.");
+                            }
+                        }
+                    });
                 } else {
-                    JOptionPane.showMessageDialog(this,
-                            "Failed to change priority. You may not have permission.",
-                            "Error", JOptionPane.ERROR_MESSAGE);
+                    // Fallback: dùng method cũ
+                    if (manager.reniceProcess(pid, niceValue)) {
+                        JOptionPane.showMessageDialog(this,
+                                "Priority changed to " + selectedPriority + " successfully.",
+                                "Success", JOptionPane.INFORMATION_MESSAGE);
+                        manager.refreshSnapshot();
+                        refreshInfo();
+                    } else {
+                        showError("Change Priority",
+                            "Failed to change priority. You may not have permission.");
+                    }
                 }
             }
         }
     }
-    
-    /**
-     * Map priority string sang nice value.
-     */
+
     private int mapPriorityToNice(String priority) {
         return switch (priority) {
             case "Very High" -> -15;
@@ -462,10 +510,7 @@ public class ProcessDetailDialog extends JDialog {
             default -> 0;
         };
     }
-    
-    /**
-     * Resolve priority string từ nice value (để hiển thị trong combo box).
-     */
+
     private String resolvePriorityFromNice(int nice) {
         if (nice <= -15) return "Very High";
         if (nice <= -10) return "High";
@@ -491,7 +536,6 @@ public class ProcessDetailDialog extends JDialog {
         }
     }
 
-    // Format helpers
     private String formatState(String state) {
         if (state == null || state.isEmpty()) return "?";
         char s = state.charAt(0);
@@ -537,11 +581,6 @@ public class ProcessDetailDialog extends JDialog {
         }
     }
 
-    /**
-     * Format start time từ startTimeTicks.
-     * startTimeTicks là số ticks từ boot, cần đọc /proc/uptime để tính thời gian thực.
-     * Để đơn giản, hiển thị relative time hoặc absolute nếu có thể.
-     */
     private String formatStartTime(long startTimeTicks) {
         try {
             // Đọc /proc/uptime để tính boot time

@@ -5,10 +5,6 @@ import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.JTableHeader;
 import java.awt.*;
 
-/**
- * Utility class để tách style ra khỏi logic.
- * Style theo GNOME System Monitor.
- */
 public class ProcessTableStyleUtil {
 
     // Màu sắc theo GNOME System Monitor
@@ -19,9 +15,6 @@ public class ProcessTableStyleUtil {
     private static final Color BORDER_COLOR = new Color(0xD0D0D0);
     private static final Color DEFAULT_TEXT_COLOR = new Color(0x2E3436); // Màu chữ đậm, dễ đọc
 
-    /**
-     * Áp dụng style cho JTable.
-     */
     public static void applyTableStyle(JTable table) {
         // Heat-based row coloring - renderer duy nhất cho toàn bảng
         table.setDefaultRenderer(Object.class, new ProcessHeatRenderer(table));
@@ -60,11 +53,6 @@ public class ProcessTableStyleUtil {
         header.setDefaultRenderer(new HeaderRenderer());
     }
 
-    /**
-     * Renderer tô màu hàng theo mức sử dụng CPU%/MEM%.
-     * Màu nền thay đổi theo heat = max(CPU%, MEM%) - giá trị tuyệt đối.
-     * Màu chữ không đổi, chỉ đổi nền.
-     */
     private static class ProcessHeatRenderer extends DefaultTableCellRenderer {
         private final JTable table;
         private static final int CPU_COLUMN = 3; // Cột CPU %
@@ -180,10 +168,6 @@ public class ProcessTableStyleUtil {
         }
     }
 
-
-    /**
-     * Renderer cho header.
-     */
     private static class HeaderRenderer extends DefaultTableCellRenderer {
         public HeaderRenderer() {
             setHorizontalAlignment(SwingConstants.LEFT);
@@ -204,9 +188,6 @@ public class ProcessTableStyleUtil {
         }
     }
 
-    /**
-     * Áp dụng style cho button (flat style).
-     */
     public static void applyButtonStyle(JButton button) {
         button.setFocusPainted(false);
         button.setBorderPainted(false);
@@ -232,9 +213,6 @@ public class ProcessTableStyleUtil {
         });
     }
 
-    /**
-     * Áp dụng style cho text field (search).
-     */
     public static void applyTextFieldStyle(JTextField textField) {
         textField.setBorder(BorderFactory.createCompoundBorder(
             BorderFactory.createLineBorder(BORDER_COLOR, 1),
@@ -244,9 +222,6 @@ public class ProcessTableStyleUtil {
         textField.setPreferredSize(new Dimension(200, 28));
     }
 
-    /**
-     * Áp dụng style cho menu item.
-     */
     public static void applyMenuItemStyle(JMenuItem menuItem) {
         menuItem.setFont(new Font("SansSerif", Font.PLAIN, 11));
         menuItem.setPreferredSize(new Dimension(120, 28));

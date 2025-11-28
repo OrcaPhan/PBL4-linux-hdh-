@@ -13,7 +13,6 @@ public class DiskStatReader {
 
 
     public DiskInfo readTotal() {
-// /proc/diskstats: fields… reads completed, reads merged, sectors read, time reading, writes completed, writes merged, sectors written, time writing, ...
         List<String> lines = proc.readLines("diskstats");
         long sectorsRead = 0, sectorsWritten = 0;
         for (String line : lines) {

@@ -7,7 +7,6 @@ import static com.orca.pbl4.ui.metrics.MetricsPanel.MAX_POINTS;
 
 public class ChartUtils {
 
-    // dồn điểm thật về bên phải, phần đầu fill bằng giá trị đầu tiên
     public static float[] buildSeries(Deque<Float> src) {
         float[] arr = new float[MAX_POINTS];
         if (src.isEmpty()) return arr;
@@ -24,12 +23,10 @@ public class ChartUtils {
         return arr;
     }
 
-    // series là % (0-100)
     public static Path2D createSmoothPathPercent(float[] series, int w, int chartY, int chartH) {
         return createSmoothPath(series, w, chartY, chartH, 100f);
     }
 
-    // series là rate (0 - maxVal)
     public static Path2D createSmoothPathRate(float[] series, int w, int chartY, int chartH, float maxVal) {
         return createSmoothPath(series, w, chartY, chartH, maxVal);
     }

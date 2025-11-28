@@ -9,11 +9,4 @@ public class DiskInfo {
         this.writeSectors = writeSectors;
     }
 
-    public long readBytes(){
-        return readSectors*512L ;
-    }
-
-    public long writeBytes(){
-        return writeSectors*512L ;
-    }
 }

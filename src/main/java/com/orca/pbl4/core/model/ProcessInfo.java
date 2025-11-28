@@ -3,10 +3,6 @@ package com.orca.pbl4.core.model;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Thông tin một tiến trình (process) đọc từ /proc/<pid>/...
- * Dạng Java Bean: có getter + setter.
- */
 public class ProcessInfo {
 
     private int pid;

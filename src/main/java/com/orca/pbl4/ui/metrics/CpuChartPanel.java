@@ -9,13 +9,9 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.List;
 
-import static com.orca.pbl4.ui.metrics.MetricsPanel.DF1;
 import static com.orca.pbl4.ui.metrics.MetricsPanel.MAX_POINTS;
 
-/**
- * Panel vẽ đồ thị CPU per-core.
- * Giống GNOME System Monitor: mỗi core một đường màu riêng, không có đường tổng.
- */
+
 public class CpuChartPanel extends JPanel {
 
     private final List<Deque<Float>> coreSeries = new ArrayList<>();
@@ -38,33 +34,12 @@ public class CpuChartPanel extends JPanel {
             new Color(0x1A2F70),
     };
 
-
-//    // Màu cho các core (mỗi core một màu, lặp lại nếu nhiều hơn số màu)
-//    private static final Color[] CORE_COLORS = {
-//        new Color(0x4ECDC4), // cyan
-//        new Color(0x95E1D3), // light cyan
-//        new Color(0xF38181), // light red
-//        new Color(0xAA96DA), // purple
-//        new Color(0xFCBAD3), // pink
-//        new Color(0xFFFFD2), // yellow
-//        new Color(0xC7CEEA), // light blue
-//        new Color(0xFFB6C1), // light pink
-//        new Color(0x98D8C8), // mint
-//        new Color(0xFFCD00), // gold
-//        new Color(0xBB8FCE), // lavender
-//        new Color(0x85C1E2), // sky blue
-//    };
-
     public CpuChartPanel() {
         setPreferredSize(new Dimension(0, 200));
         setBackground(Color.WHITE);
         setBorder(BorderFactory.createTitledBorder("CPU"));
     }
 
-    /**
-     * Khởi tạo số lượng core và tạo Deque cho từng core.
-     * @param cores Số lượng CPU cores
-     */
     public void setCoreCount(int cores) {
         this.coreCount = Math.max(0, cores);
         // Đảm bảo có đủ Deque cho từng core
@@ -77,11 +52,6 @@ public class CpuChartPanel extends JPanel {
         }
     }
 
-    /**
-     * Thêm một mẫu dữ liệu per-core.
-     * @param perCorePercent Mảng %CPU của từng core (0-100), length = coreCount
-     *                       Có thể chứa NaN nếu chưa có dữ liệu (sẽ được thay bằng 0f khi vẽ)
-     */
     public void addPerCoreSample(float[] perCorePercent) {
         if (perCorePercent == null || coreSeries.isEmpty()) return;
 
@@ -89,7 +59,6 @@ public class CpuChartPanel extends JPanel {
         for (int i = 0; i < actualCores; i++) {
             Deque<Float> coreDeque = coreSeries.get(i);
             float value = perCorePercent[i];
-            // Thay NaN bằng 0f để tránh lỗi khi vẽ (NaN sẽ hiển thị như 0%)
             if (Float.isNaN(value)) {
                 value = 0f;
             }
@@ -125,7 +94,6 @@ public class CpuChartPanel extends JPanel {
             g2.setColor(new Color(0xE0E0E0));
         }
 
-        // Vẽ các đường per-core (mỗi core một màu)
         for (int i = 0; i < coreCount && i < coreSeries.size(); i++) {
             Deque<Float> coreDeque = coreSeries.get(i);
             if (coreDeque.isEmpty()) continue;
@@ -135,7 +103,7 @@ public class CpuChartPanel extends JPanel {
 
             Color coreColor = CORE_COLORS[i % CORE_COLORS.length];
             g2.setColor(coreColor);
-            g2.setStroke(new BasicStroke(1.75f)); // nét rõ nhưng không quá dày (1.5-2f)
+            g2.setStroke(new BasicStroke(1.75f));
             g2.draw(path);
         }
 

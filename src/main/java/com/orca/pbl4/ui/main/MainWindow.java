@@ -12,10 +12,6 @@ import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 import java.awt.BorderLayout;
 
-/**
- * Cửa sổ chính của ứng dụng.
- * TODO: bổ sung các tab khác (CPU, Disk, ...) nếu cần.
- */
 public class MainWindow extends JFrame {
 
     private final ProcessManager processManager;

@@ -30,13 +30,11 @@ public class PasswdCache {
         String n = uid2name.get(uid);
         if (n != null) return n;
 
-        // Fallback: hỏi NSS
         String via = nssLookup(uid);
         if (via != null && !via.isBlank()) {
             uid2name.put(uid, via); // cache lại
             return via;
         }
-        // Cuối cùng: trả về số
         return String.valueOf(uid);
     }
 
@@ -48,7 +46,6 @@ public class PasswdCache {
                 lastMtime = m;
             }
         } catch (IOException ignore) {
-            // Không đọc được thì giữ map hiện tại
         }
     }
     private Map<Integer, String> loadPasswd() throws IOException {
