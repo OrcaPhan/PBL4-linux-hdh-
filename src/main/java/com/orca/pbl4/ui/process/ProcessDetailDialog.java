@@ -9,494 +9,386 @@ import com.orca.pbl4.service.process.ProcessSignalService;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.function.Supplier;
 
 public class ProcessDetailDialog extends JDialog {
 
-    private static final long HZ = 100; // Clock ticks per second (thường là 100 trên Linux)
-    private static final long PAGE_SIZE_KB = 4; // Page size 4KB
+    private static final long HZ = 100; // Clock ticks per second
+    private static final long PAGE_SIZE_KB = 4;
+
+    // Tối ưu: Tính toán boot time 1 lần duy nhất (Static initialization) để không đọc file mỗi giây
+    private static final long BOOT_TIME_SECONDS;
+    static {
+        long bootTime = System.currentTimeMillis() / 1000;
+        try {
+            String uptimeStr = Files.readString(Paths.get("/proc/uptime"));
+            double uptimeSeconds = Double.parseDouble(uptimeStr.split("\\s+")[0]);
+            bootTime = (long) (System.currentTimeMillis() / 1000 - uptimeSeconds);
+        } catch (Exception ignored) { }
+        BOOT_TIME_SECONDS = bootTime;
+    }
 
     private final ProcessManager manager;
-    private int pid; // Có thể thay đổi nếu tiến trình đang chọn thay đổi
+    private int pid;
     private ProcessInfo info;
+    private final Supplier<Integer> selectedPidSupplier;
 
-    private JPanel infoPanel;
+    // UI Cache: Lưu trữ các Label để update text thay vì vẽ lại panel
+    private final Map<String, JLabel> uiLabels = new HashMap<>();
     private JTextArea cmdlineArea;
-    private JButton btnKill, btnStop, btnContinue, btnSetNice;
-    
 
     private javax.swing.Timer refreshTimer;
-    private java.util.function.Supplier<Integer> selectedPidSupplier;
+    private SwingWorker<ProcessInfo, Void> dataWorker;
 
-    public ProcessDetailDialog(ProcessManager manager, int pid, java.util.function.Supplier<Integer> selectedPidSupplier) {
+    public ProcessDetailDialog(ProcessManager manager, int pid, Supplier<Integer> selectedPidSupplier) {
         super();
         this.manager = manager;
         this.pid = pid;
         this.selectedPidSupplier = selectedPidSupplier;
+
         setTitle("Process Detail - PID " + pid);
         setSize(600, 700);
         setLocationRelativeTo(null);
-        setModal(false); // Không modal để có thể tương tác với bảng
+        setModal(false);
 
-        loadProcessInfo();
+        // 1. Dựng khung UI (chỉ chạy 1 lần)
         buildUI();
-        
-        // Tạo timer để tự refresh mỗi 1 giây
-        refreshTimer = new javax.swing.Timer(1000, e -> refreshIfNeeded());
+
+        // 2. Load dữ liệu ban đầu
+        loadInitialData();
+
+        // 3. Setup Timer refresh (1 giây/lần)
+        refreshTimer = new javax.swing.Timer(1000, e -> triggerBackgroundRefresh());
         refreshTimer.start();
-        
-        // Dừng timer khi đóng dialog
+
         addWindowListener(new java.awt.event.WindowAdapter() {
             @Override
             public void windowClosing(java.awt.event.WindowEvent e) {
-                if (refreshTimer != null) {
-                    refreshTimer.stop();
-                }
+                if (refreshTimer != null) refreshTimer.stop();
+                if (dataWorker != null && !dataWorker.isDone()) dataWorker.cancel(true);
             }
         });
     }
 
-    private void loadProcessInfo() {
-        // Nếu có supplier, lấy PID đang được chọn trên bảng
+    // --- Data Loading & Refresh Logic ---
+
+    private void loadInitialData() {
+        checkPidChange();
+        info = manager.getProcessDetail(pid);
+        if (info == null) {
+            handleProcessNotFound();
+        } else {
+            updateUIValues(); // Update dữ liệu lên UI đã dựng sẵn
+        }
+    }
+
+    private void triggerBackgroundRefresh() {
+        // Nếu worker cũ chưa xong thì bỏ qua tick này
+        if (dataWorker != null && !dataWorker.isDone()) return;
+
+        dataWorker = new SwingWorker<>() {
+            @Override
+            protected ProcessInfo doInBackground() {
+                checkPidChange(); // Kiểm tra xem người dùng có chọn dòng khác ở bảng chính không
+                return manager.getProcessDetail(pid);
+            }
+
+            @Override
+            protected void done() {
+                try {
+                    ProcessInfo newInfo = get();
+                    if (newInfo == null) {
+                        // Process có thể đã tắt, giữ nguyên info cũ hoặc xử lý tùy ý
+                        return;
+                    }
+                    info = newInfo;
+                    updateUIValues();
+                    setTitle("Process Detail - PID " + pid);
+                } catch (Exception ignored) { }
+            }
+        };
+        dataWorker.execute();
+    }
+
+    private void checkPidChange() {
         if (selectedPidSupplier != null) {
             Integer selectedPid = selectedPidSupplier.get();
-            if (selectedPid != null && selectedPid > 0) {
+            if (selectedPid != null && selectedPid > 0 && selectedPid != pid) {
                 pid = selectedPid;
             }
         }
-        
-        info = manager.getProcessDetail(pid);
-        if (info == null) {
-            // Process không còn tồn tại, đóng dialog
-            if (refreshTimer != null) {
-                refreshTimer.stop();
-            }
-            JOptionPane.showMessageDialog(this,
-                    "Process with PID " + pid + " not found or cannot be accessed.",
-                    "Process Not Found", JOptionPane.INFORMATION_MESSAGE);
-            dispose();
-        }
     }
 
-    private void refreshIfNeeded() {
-        SwingUtilities.invokeLater(() -> {
-            // Kiểm tra PID đang được chọn trên bảng (nếu có supplier)
-            if (selectedPidSupplier != null) {
-                Integer selectedPid = selectedPidSupplier.get();
-                if (selectedPid != null && selectedPid > 0 && selectedPid != pid) {
-                    // PID đã thay đổi, load lại với PID mới
-                    pid = selectedPid;
-                    loadProcessInfo();
-                    if (info != null) {
-                        updateInfoPanel();
-                        setTitle("Process Detail - PID " + pid);
-                    }
-                    return;
-                }
-            }
-            
-            // PID không đổi, chỉ refresh thông tin hiện tại
-            ProcessInfo newInfo = manager.getProcessDetail(pid);
-            if (newInfo == null) {
-                // Process không còn tồn tại
-                loadProcessInfo(); // Sẽ đóng dialog
-                return;
-            }
-            
-            // So sánh các field quan trọng để quyết định có cần update không
-            boolean needsUpdate = info == null;
-            if (!needsUpdate) {
-                // So sánh các field có thể thay đổi
-                Float oldCpu = info.getCpuPercent();
-                Float newCpu = newInfo.getCpuPercent();
-                Float oldMem = info.getMemoryPercent();
-                Float newMem = newInfo.getMemoryPercent();
-                
-                needsUpdate = (oldCpu == null && newCpu != null) || 
-                             (oldCpu != null && !oldCpu.equals(newCpu)) ||
-                             (oldMem == null && newMem != null) ||
-                             (oldMem != null && !oldMem.equals(newMem)) ||
-                             info.getProcCpuTicks() != newInfo.getProcCpuTicks() ||
-                             info.getRssPages() != newInfo.getRssPages() ||
-                             !safe(info.getState(), "").equals(safe(newInfo.getState(), ""));
-            }
-            
-            if (needsUpdate) {
-                info = newInfo;
-                updateInfoPanel();
-                setTitle("Process Detail - PID " + pid);
-            }
-        });
+    private void handleProcessNotFound() {
+        if (refreshTimer != null) refreshTimer.stop();
+        JOptionPane.showMessageDialog(this,
+                "Process with PID " + pid + " not found or cannot be accessed.",
+                "Process Not Found", JOptionPane.INFORMATION_MESSAGE);
+        dispose();
     }
 
-    private void updateInfoPanel() {
-        infoPanel.removeAll();
-        fillInfoPanel();
-        infoPanel.revalidate();
-        infoPanel.repaint();
-    }
+    // --- UI Construction (Chỉ chạy 1 lần) ---
 
     private void buildUI() {
         setLayout(new BorderLayout(8, 8));
-        ((JComponent) getContentPane())
-                .setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
+        ((JComponent) getContentPane()).setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
 
-        // Scroll pane cho thông tin chính
-        infoPanel = new JPanel(new GridBagLayout());
+        // Info Panel
+        JPanel infoPanel = new JPanel(new GridBagLayout());
         infoPanel.setBorder(BorderFactory.createTitledBorder("Process Information"));
         infoPanel.setBackground(Color.WHITE);
-        fillInfoPanel();
-
-        JScrollPane scrollPane = new JScrollPane(infoPanel);
-        scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
-        scrollPane.setBorder(BorderFactory.createLineBorder(new Color(0xD0D0D0)));
-        add(scrollPane, BorderLayout.CENTER);
-
-        // Panel nút thao tác
-        JPanel buttonPanel = createButtonPanel();
-        buttonPanel.setBackground(Color.WHITE);
-        add(buttonPanel, BorderLayout.SOUTH);
-    }
-
-    private void fillInfoPanel() {
-        if (info == null) return;
 
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.anchor = GridBagConstraints.WEST;
         gbc.insets = new Insets(4, 8, 4, 8);
         int row = 0;
 
-        // Process name
-        addInfoRow("Process name:", safe(info.getName(), "?"), gbc, row++);
+        // Tạo các dòng thông tin và lưu reference của Label giá trị vào Map
+        addInfoRow(infoPanel, "Process name:", "name", gbc, row++);
+        addInfoRow(infoPanel, "User:", "user", gbc, row++);
+        addInfoRow(infoPanel, "State:", "state", gbc, row++);
+        addInfoRow(infoPanel, "CPU %:", "cpu", gbc, row++);
+        addInfoRow(infoPanel, "CPU time:", "cpuTime", gbc, row++);
+        addInfoRow(infoPanel, "Memory %:", "mem", gbc, row++);
+        addInfoRow(infoPanel, "RSS:", "rss", gbc, row++);
+        addInfoRow(infoPanel, "Virtual memory:", "vsz", gbc, row++);
+        addInfoRow(infoPanel, "Shared memory:", "shared", gbc, row++);
+        addInfoRow(infoPanel, "Nice:", "nice", gbc, row++);
+        addInfoRow(infoPanel, "Priority:", "priority", gbc, row++);
+        addInfoRow(infoPanel, "Started:", "startTime", gbc, row++);
+        addInfoRow(infoPanel, "PID:", "pid", gbc, row++);
+        addInfoRow(infoPanel, "Threads:", "threads", gbc, row++);
+        addInfoRow(infoPanel, "Handles:", "handles", gbc, row++);
+        addInfoRow(infoPanel, "I/O Read:", "ioRead", gbc, row++);
+        addInfoRow(infoPanel, "I/O Write:", "ioWrite", gbc, row++);
 
-        // User
-        addInfoRow("User:", safe(info.getUser(), "?"), gbc, row++);
-
-        // State
-        addInfoRow("State:", formatState(info.getState()), gbc, row++);
-
-        // CPU% - hiển thị giá trị hoặc "N/A" nếu null
-        if (info.getCpuPercent() != null) {
-            float cpuPercent = info.getCpuPercent();
-            addInfoRow("CPU %:", String.format(Locale.US, "%.1f%%", cpuPercent), gbc, row++);
-        } else {
-            // Hiển thị "N/A" nếu không có giá trị
-            addInfoRow("CPU %:", "N/A", gbc, row++);
-        }
-
-        // CPU time (từ procCpuTicks)
-        double cpuTimeSeconds = info.getProcCpuTicks() / (double) HZ;
-        String cpuTimeStr = formatTime(cpuTimeSeconds);
-        addInfoRow("CPU time:", cpuTimeStr, gbc, row++);
-
-        // Memory % - hiển thị giá trị hoặc "N/A" nếu null
-        if (info.getMemoryPercent() != null) {
-            float memPercent = info.getMemoryPercent();
-            addInfoRow("Memory %:", String.format(Locale.US, "%.1f%%", memPercent), gbc, row++);
-        } else {
-            // Hiển thị "N/A" nếu không có giá trị
-            addInfoRow("Memory %:", "N/A", gbc, row++);
-        }
-
-        // RSS
-        long rssKB = info.getRssPages() * PAGE_SIZE_KB;
-        addInfoRow("RSS:", formatMemory(rssKB), gbc, row++);
-
-        // Virtual memory
-        if (info.getVirtualPages() > 0) {
-            long virtualKB = info.getVirtualPages() * PAGE_SIZE_KB;
-            addInfoRow("Virtual memory:", formatMemory(virtualKB), gbc, row++);
-        }
-
-        // Shared memory
-        if (info.getSharedPages() > 0) {
-            long sharedKB = info.getSharedPages() * PAGE_SIZE_KB;
-            addInfoRow("Shared memory:", formatMemory(sharedKB), gbc, row++);
-        }
-
-        // Nice
-        addInfoRow("Nice:", String.valueOf(info.getNice()), gbc, row++);
-
-        // Priority
-        addInfoRow("Priority:", String.valueOf(info.getPriority()), gbc, row++);
-
-        // Started (từ startTimeTicks)
-        String startedStr = formatStartTime(info.getStartTimeTicks());
-        addInfoRow("Started:", startedStr, gbc, row++);
-
-        // PID
-        addInfoRow("PID:", String.valueOf(info.getPid()), gbc, row++);
-
-        // Threads
-        List<ThreadInfo> threads = info.getThreads();
-        addInfoRow("Threads:", String.valueOf(threads != null ? threads.size() : 0), gbc, row++);
-
-        // Handles
-        List<HandleInfo> handles = info.getHandles();
-        addInfoRow("Handles:", String.valueOf(handles != null ? handles.size() : 0), gbc, row++);
-
-        // I/O Read
-        if (info.getIoReadBytes() > 0) {
-            addInfoRow("I/O Read:", formatBytes(info.getIoReadBytes()), gbc, row++);
-        }
-
-        // I/O Write
-        if (info.getIoWriteBytes() > 0) {
-            addInfoRow("I/O Write:", formatBytes(info.getIoWriteBytes()), gbc, row++);
-        }
-
-        // Command line
-        gbc.gridx = 0;
-        gbc.gridy = row++;
-        gbc.gridwidth = 2;
-        gbc.fill = GridBagConstraints.HORIZONTAL;
-        gbc.weightx = 1.0;
+        // Command line area (Riêng biệt vì nó là TextArea)
+        gbc.gridx = 0; gbc.gridy = row++;
+        gbc.gridwidth = 2; gbc.fill = GridBagConstraints.HORIZONTAL; gbc.weightx = 1.0;
         infoPanel.add(new JLabel("Command line:"), gbc);
 
         gbc.gridy = row++;
-        gbc.fill = GridBagConstraints.BOTH;
-        gbc.weighty = 1.0;
-        cmdlineArea = new JTextArea(safe(info.getCmdline(), "(no command line)"));
+        gbc.fill = GridBagConstraints.BOTH; gbc.weighty = 1.0;
+        cmdlineArea = new JTextArea();
         cmdlineArea.setEditable(false);
         cmdlineArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 11));
         cmdlineArea.setBackground(Color.WHITE);
         cmdlineArea.setBorder(BorderFactory.createLoweredBevelBorder());
+        cmdlineArea.setLineWrap(true);
+
         JScrollPane cmdlineScroll = new JScrollPane(cmdlineArea);
         cmdlineScroll.setPreferredSize(new Dimension(0, 100));
         infoPanel.add(cmdlineScroll, gbc);
+
+        JScrollPane mainScroll = new JScrollPane(infoPanel);
+        mainScroll.getVerticalScrollBar().setUnitIncrement(16);
+        mainScroll.setBorder(BorderFactory.createLineBorder(new Color(0xD0D0D0)));
+        add(mainScroll, BorderLayout.CENTER);
+
+        // Button Panel
+        add(createButtonPanel(), BorderLayout.SOUTH);
     }
 
-    private void addInfoRow(String label, String value, GridBagConstraints gbc, int row) {
-        gbc.gridx = 0;
-        gbc.gridy = row;
-        gbc.gridwidth = 1;
-        gbc.weightx = 0.0;
+    private void addInfoRow(JPanel panel, String labelText, String key, GridBagConstraints gbc, int row) {
+        gbc.gridx = 0; gbc.gridy = row;
+        gbc.gridwidth = 1; gbc.weightx = 0.0;
         gbc.fill = GridBagConstraints.NONE;
-        JLabel lbl = new JLabel(label);
-        lbl.setFont(lbl.getFont().deriveFont(Font.BOLD));
-        infoPanel.add(lbl, gbc);
 
-        gbc.gridx = 1;
-        gbc.weightx = 1.0;
+        JLabel lblTitle = new JLabel(labelText);
+        lblTitle.setFont(lblTitle.getFont().deriveFont(Font.BOLD));
+        panel.add(lblTitle, gbc);
+
+        gbc.gridx = 1; gbc.weightx = 1.0;
         gbc.fill = GridBagConstraints.HORIZONTAL;
-        infoPanel.add(new JLabel(value), gbc);
+
+        JLabel lblValue = new JLabel("..."); // Placeholder
+        uiLabels.put(key, lblValue); // Lưu vào Map để update sau
+        panel.add(lblValue, gbc);
     }
+
+    // --- UI Updates (Chạy mỗi giây) ---
+
+    private void updateUIValues() {
+        if (info == null) return;
+
+        setLabelText("name", safe(info.getName(), "?"));
+        setLabelText("user", safe(info.getUser(), "?"));
+        setLabelText("state", formatState(info.getState()));
+
+        Float cpu = info.getCpuPercent();
+        setLabelText("cpu", cpu != null ? String.format(Locale.US, "%.1f%%", cpu) : "N/A");
+        setLabelText("cpuTime", formatTime(info.getProcCpuTicks() / (double) HZ));
+
+        Float mem = info.getMemoryPercent();
+        setLabelText("mem", mem != null ? String.format(Locale.US, "%.1f%%", mem) : "N/A");
+
+        setLabelText("rss", formatMemory(info.getRssPages() * PAGE_SIZE_KB));
+        setLabelText("vsz", info.getVirtualPages() > 0 ? formatMemory(info.getVirtualPages() * PAGE_SIZE_KB) : "N/A");
+        setLabelText("shared", info.getSharedPages() > 0 ? formatMemory(info.getSharedPages() * PAGE_SIZE_KB) : "N/A");
+
+        setLabelText("nice", String.valueOf(info.getNice()));
+        setLabelText("priority", String.valueOf(info.getPriority()));
+        setLabelText("startTime", formatStartTime(info.getStartTimeTicks()));
+        setLabelText("pid", String.valueOf(info.getPid()));
+
+        setLabelText("threads", String.valueOf(info.getThreads() != null ? info.getThreads().size() : 0));
+        setLabelText("handles", String.valueOf(info.getHandles() != null ? info.getHandles().size() : 0));
+
+        setLabelText("ioRead", info.getIoReadBytes() > 0 ? formatBytes(info.getIoReadBytes()) : "0 B");
+        setLabelText("ioWrite", info.getIoWriteBytes() > 0 ? formatBytes(info.getIoWriteBytes()) : "0 B");
+
+        String newCmd = safe(info.getCmdline(), "(no command line)");
+        if (!newCmd.equals(cmdlineArea.getText())) {
+            cmdlineArea.setText(newCmd);
+            cmdlineArea.setCaretPosition(0);
+        }
+    }
+
+    private void setLabelText(String key, String text) {
+        JLabel lbl = uiLabels.get(key);
+        if (lbl != null) lbl.setText(text);
+    }
+
+    // --- Button Actions ---
 
     private JPanel createButtonPanel() {
         JPanel panel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 8));
         panel.setBorder(BorderFactory.createTitledBorder("Actions"));
 
-        btnKill = new JButton("Kill");
-        btnKill.addActionListener(e -> handleKill());
-        ProcessTableStyleUtil.applyButtonStyle(btnKill);
+        JButton btnKill = createStyledButton("Kill", e -> handleKill());
+        JButton btnStop = createStyledButton("Stop", e -> handleSignalAction("STOP", "Stop"));
+        JButton btnContinue = createStyledButton("Continue", e -> handleSignalAction("CONT", "Continue"));
+        JButton btnSetNice = createStyledButton("Change Priority...", e -> handleSetPriority());
+        JButton btnClose = createStyledButton("Close", e -> dispose());
+
         panel.add(btnKill);
-
-        btnStop = new JButton("Stop");
-        btnStop.addActionListener(e -> handleStop());
-        ProcessTableStyleUtil.applyButtonStyle(btnStop);
         panel.add(btnStop);
-
-        btnContinue = new JButton("Continue");
-        btnContinue.addActionListener(e -> handleContinue());
-        ProcessTableStyleUtil.applyButtonStyle(btnContinue);
         panel.add(btnContinue);
-
-        btnSetNice = new JButton("Change Priority...");
-        btnSetNice.addActionListener(e -> handleSetPriority());
-        ProcessTableStyleUtil.applyButtonStyle(btnSetNice);
         panel.add(btnSetNice);
-
-        JButton btnClose = new JButton("Close");
-        btnClose.addActionListener(e -> dispose());
-        ProcessTableStyleUtil.applyButtonStyle(btnClose);
         panel.add(btnClose);
-
         return panel;
     }
 
+    private JButton createStyledButton(String text, java.awt.event.ActionListener action) {
+        JButton btn = new JButton(text);
+        btn.addActionListener(action);
+        ProcessTableStyleUtil.applyButtonStyle(btn);
+        return btn;
+    }
+
+    // --- Logic Xử lý sự kiện (Kill, Stop, Priority) ---
+
     private void handleKill() {
-        if (!confirmAction("Kill", "Are you sure you want to kill this process?")) {
-            return;
-        }
-        
-        // Kiểm tra xem có cần root không
+        if (!confirmAction("Kill", "Are you sure you want to kill this process?")) return;
+
+        // Kill riêng biệt: Thành công -> Refresh Manager -> Đóng Dialog
         boolean requireRoot = shouldRequireRoot();
         sendSignalAsync(pid, "TERM", requireRoot, "Kill", () -> {
             manager.refreshSnapshot();
-            dispose();
+            dispose(); // <--- ĐÓNG DIALOG NGAY
         });
     }
 
-    private void handleStop() {
-        if (!confirmAction("Stop", "Are you sure you want to stop this process?")) {
-            return;
+    private void handleSignalAction(String signal, String actionName) {
+        boolean requireRoot = shouldRequireRoot();
+        sendSignalAsync(pid, signal, requireRoot, actionName, () -> {
+            manager.refreshSnapshot();
+            triggerBackgroundRefresh();
+        });
+    }
+
+    private void handleSetPriority() {
+        String[] priorities = {"Very High", "High", "Above Normal", "Normal", "Below Normal", "Low", "Very Low"};
+
+        String currentPriority = (info != null) ? resolvePriorityFromNice(info.getNice()) : "Normal";
+
+        JComboBox<String> comboBox = new JComboBox<>(priorities);
+        comboBox.setSelectedItem(currentPriority);
+        comboBox.setFont(new Font("SansSerif", Font.PLAIN, 12));
+
+        JPanel panel = new JPanel(new BorderLayout(10, 10));
+        panel.add(new JLabel("Select priority level:"), BorderLayout.NORTH);
+        panel.add(comboBox, BorderLayout.CENTER);
+        panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+
+        int result = JOptionPane.showConfirmDialog(this, panel, "Change Priority",
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+
+        if (result == JOptionPane.OK_OPTION) {
+            String selectedPriority = (String) comboBox.getSelectedItem();
+            if (selectedPriority != null) {
+                int niceValue = mapPriorityToNice(selectedPriority);
+                boolean requireRoot = shouldRequireRoot();
+
+                ProcessSignalService signalService = getSignalService();
+
+                if (signalService != null) {
+                    signalService.reniceAsync(pid, niceValue, requireRoot, r -> {
+                        SwingUtilities.invokeLater(() -> {
+                            if (r == ProcessSignalService.SignalResult.SUCCESS) {
+                                JOptionPane.showMessageDialog(this, "Priority changed successfully.",
+                                        "Success", JOptionPane.INFORMATION_MESSAGE);
+                                manager.refreshSnapshot();
+                                triggerBackgroundRefresh();
+                            } else {
+                                handleSignalResult(r, "Change Priority", null);
+                            }
+                        });
+                    });
+                } else {
+                    // Fallback method cũ
+                    if (manager.reniceProcess(pid, niceValue)) {
+                        JOptionPane.showMessageDialog(this, "Priority changed successfully.",
+                                "Success", JOptionPane.INFORMATION_MESSAGE);
+                        manager.refreshSnapshot();
+                        triggerBackgroundRefresh();
+                    } else {
+                        showError("Change Priority", "Failed to change priority.");
+                    }
+                }
+            }
         }
-        
-        boolean requireRoot = shouldRequireRoot();
-        sendSignalAsync(pid, "STOP", requireRoot, "Stop", () -> {
-            manager.refreshSnapshot();
-            refreshInfo();
-        });
-    }
-
-    private void handleContinue() {
-        boolean requireRoot = shouldRequireRoot();
-        sendSignalAsync(pid, "CONT", requireRoot, "Continue", () -> {
-            manager.refreshSnapshot();
-            refreshInfo();
-        });
     }
 
     private void sendSignalAsync(int pid, String signal, boolean requireRoot, String actionName, Runnable onSuccess) {
         ProcessSignalService signalService = getSignalService();
         if (signalService == null) {
-            // Fallback: dùng method cũ
             boolean success = switch (signal) {
                 case "TERM", "KILL" -> manager.killProcess(pid);
                 case "STOP" -> manager.stopProcess(pid);
                 case "CONT" -> manager.continueProcess(pid);
                 default -> false;
             };
-            if (success) {
-                if (onSuccess != null) onSuccess.run();
-            } else {
-                showError(actionName, "Failed to " + actionName.toLowerCase() + " process. Permission denied or process not found.");
-            }
+            if (success && onSuccess != null) onSuccess.run();
+            else if (!success) showError(actionName, "Failed to " + actionName.toLowerCase() + " process.");
             return;
         }
 
         signalService.sendSignal(pid, signal, requireRoot, result -> {
-            switch (result) {
-                case SUCCESS -> {
-                    if (onSuccess != null) onSuccess.run();
-                }
-                case PERMISSION_DENIED -> {
-                    showError(actionName, "Permission denied. You may need root privileges to " + actionName.toLowerCase() + " this process.");
-                }
-                case PROCESS_NOT_FOUND -> {
-                    showError(actionName, "Process not found. It may have already terminated.");
-                }
-                case USER_CANCELLED -> {
-                    showError(actionName, actionName + " failed: authentication cancelled or wrong password.");
-                }
-                case UNKNOWN_ERROR -> {
-                    showError(actionName, "Unknown error while sending signal.");
-                }
-            }
+            SwingUtilities.invokeLater(() -> handleSignalResult(result, actionName, onSuccess));
         });
     }
 
-    private ProcessSignalService getSignalService() {
-        if (manager instanceof DefaultProcessManager) {
-            return ((DefaultProcessManager) manager).getSignalService();
-        }
-        return null;
-    }
-
-    private boolean shouldRequireRoot() {
-        if (info == null) return false;
-        String user = info.getUser();
-        if (user == null) return false;
-        String currentUser = System.getProperty("user.name");
-        // Nếu process thuộc user khác hoặc root thì có thể cần quyền root
-        return !user.equals(currentUser) || "root".equals(user);
-    }
-
-    private void showError(String title, String message) {
-        JOptionPane.showMessageDialog(this, message, title + " Error", JOptionPane.ERROR_MESSAGE);
-    }
-
-    private void handleSetPriority() {
-        // Tạo combo box với các mức priority
-        String[] priorities = {
-            "Very High",
-            "High",
-            "Above Normal",
-            "Normal",
-            "Below Normal",
-            "Low",
-            "Very Low"
-        };
-        
-        // Lấy priority hiện tại từ process info
-        String currentPriority = info != null && info.getPriority() != 0
-            ? resolvePriorityFromNice(info.getNice()) 
-            : "Normal";
-        
-        JComboBox<String> comboBox = new JComboBox<>(priorities);
-        comboBox.setSelectedItem(currentPriority);
-        comboBox.setFont(new Font("SansSerif", Font.PLAIN, 12));
-        
-        JPanel panel = new JPanel(new BorderLayout(10, 10));
-        panel.add(new JLabel("Select priority level:"), BorderLayout.NORTH);
-        panel.add(comboBox, BorderLayout.CENTER);
-        panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
-        
-        int result = JOptionPane.showConfirmDialog(
-            this,
-            panel,
-            "Change Priority",
-            JOptionPane.OK_CANCEL_OPTION,
-            JOptionPane.PLAIN_MESSAGE
-        );
-        
-        if (result == JOptionPane.OK_OPTION) {
-            String selectedPriority = (String) comboBox.getSelectedItem();
-            if (selectedPriority != null) {
-                int niceValue = mapPriorityToNice(selectedPriority);
-                boolean requireRoot = shouldRequireRoot();
-                
-                ProcessSignalService signalService = getSignalService();
-                if (signalService != null) {
-                    signalService.reniceAsync(pid, niceValue, requireRoot, r -> {
-                        switch (r) {
-                            case SUCCESS -> {
-                                JOptionPane.showMessageDialog(this,
-                                    "Priority changed to " + selectedPriority + " successfully.",
-                                    "Success", JOptionPane.INFORMATION_MESSAGE);
-                                manager.refreshSnapshot();
-                                refreshInfo();
-                            }
-                            case PERMISSION_DENIED -> {
-                                showError("Change Priority",
-                                    "Permission denied. You may need root privileges.");
-                            }
-                            case USER_CANCELLED -> {
-                                showError("Change Priority",
-                                    "Change priority cancelled or wrong password.");
-                            }
-                            case PROCESS_NOT_FOUND -> {
-                                showError("Change Priority",
-                                    "Process not found. It may have already terminated.");
-                            }
-                            case UNKNOWN_ERROR -> {
-                                showError("Change Priority",
-                                    "Unknown error while changing priority.");
-                            }
-                        }
-                    });
-                } else {
-                    // Fallback: dùng method cũ
-                    if (manager.reniceProcess(pid, niceValue)) {
-                        JOptionPane.showMessageDialog(this,
-                                "Priority changed to " + selectedPriority + " successfully.",
-                                "Success", JOptionPane.INFORMATION_MESSAGE);
-                        manager.refreshSnapshot();
-                        refreshInfo();
-                    } else {
-                        showError("Change Priority",
-                            "Failed to change priority. You may not have permission.");
-                    }
-                }
-            }
+    private void handleSignalResult(ProcessSignalService.SignalResult result, String actionName, Runnable onSuccess) {
+        switch (result) {
+            case SUCCESS -> { if (onSuccess != null) onSuccess.run(); }
+            case PERMISSION_DENIED -> showError(actionName, "Permission denied. Root privileges required.");
+            case PROCESS_NOT_FOUND -> showError(actionName, "Process not found.");
+            case USER_CANCELLED -> showError(actionName, "Action cancelled.");
+            case UNKNOWN_ERROR -> showError(actionName, "Unknown error.");
         }
     }
+
+    // --- Helpers ---
 
     private int mapPriorityToNice(String priority) {
         return switch (priority) {
@@ -521,88 +413,68 @@ public class ProcessDetailDialog extends JDialog {
         return "Very Low";
     }
 
-    private boolean confirmAction(String action, String message) {
-        return JOptionPane.showConfirmDialog(this,
-                message,
-                action + " Process",
-                JOptionPane.YES_NO_OPTION,
-                JOptionPane.WARNING_MESSAGE) == JOptionPane.YES_OPTION;
+    private ProcessSignalService getSignalService() {
+        return (manager instanceof DefaultProcessManager) ? ((DefaultProcessManager) manager).getSignalService() : null;
     }
 
-    private void refreshInfo() {
-        loadProcessInfo();
-        if (info != null) {
-            updateInfoPanel();
-        }
+    private boolean shouldRequireRoot() {
+        if (info == null) return false;
+        String user = info.getUser();
+        return user != null && (!user.equals(System.getProperty("user.name")) || "root".equals(user));
+    }
+
+    private void showError(String title, String message) {
+        JOptionPane.showMessageDialog(this, message, title + " Error", JOptionPane.ERROR_MESSAGE);
+    }
+
+    private boolean confirmAction(String action, String message) {
+        return JOptionPane.showConfirmDialog(this, message, action + " Process",
+                JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE) == JOptionPane.YES_OPTION;
+    }
+
+    private String safe(String value, String fallback) {
+        return (value == null || value.isBlank()) ? fallback : value;
     }
 
     private String formatState(String state) {
         if (state == null || state.isEmpty()) return "?";
-        char s = state.charAt(0);
-        return switch (s) {
+        return switch (state.charAt(0)) {
             case 'R' -> "R (Running)";
             case 'S' -> "S (Sleeping)";
             case 'D' -> "D (Disk sleep)";
             case 'T' -> "T (Stopped)";
             case 'Z' -> "Z (Zombie)";
-            default -> String.valueOf(s);
+            default -> state;
         };
     }
 
     private String formatTime(double seconds) {
-        if (seconds < 60) {
-            return String.format(Locale.US, "%.2f s", seconds);
-        } else if (seconds < 3600) {
-            return String.format(Locale.US, "%.2f m", seconds / 60);
-        } else {
-            return String.format(Locale.US, "%.2f h", seconds / 3600);
-        }
+        if (seconds < 60) return String.format(Locale.US, "%.2f s", seconds);
+        if (seconds < 3600) return String.format(Locale.US, "%.2f m", seconds / 60);
+        return String.format(Locale.US, "%.2f h", seconds / 3600);
     }
 
     private String formatMemory(long kb) {
-        if (kb < 1024) {
-            return String.format(Locale.US, "%.2f KiB", (double) kb);
-        } else if (kb < 1024 * 1024) {
-            return String.format(Locale.US, "%.2f MiB", kb / 1024.0);
-        } else {
-            return String.format(Locale.US, "%.2f GiB", kb / (1024.0 * 1024.0));
-        }
+        double d = kb;
+        if (d < 1024) return String.format(Locale.US, "%.2f KiB", d);
+        d /= 1024.0;
+        if (d < 1024) return String.format(Locale.US, "%.2f MiB", d);
+        return String.format(Locale.US, "%.2f GiB", d / 1024.0);
     }
 
     private String formatBytes(long bytes) {
-        if (bytes < 1024) {
-            return bytes + " bytes";
-        } else if (bytes < 1024 * 1024) {
-            return String.format(Locale.US, "%.2f KiB", bytes / 1024.0);
-        } else if (bytes < 1024 * 1024 * 1024L) {
-            return String.format(Locale.US, "%.2f MiB", bytes / (1024.0 * 1024.0));
-        } else {
-            return String.format(Locale.US, "%.2f GiB", bytes / (1024.0 * 1024.0 * 1024.0));
-        }
+        if (bytes < 1024) return bytes + " bytes";
+        return formatMemory(bytes / 1024);
     }
 
     private String formatStartTime(long startTimeTicks) {
+        // Sử dụng BOOT_TIME_SECONDS đã tính sẵn, cực nhanh
+        long startTimeSeconds = BOOT_TIME_SECONDS + (startTimeTicks / HZ);
         try {
-            // Đọc /proc/uptime để tính boot time
-            java.nio.file.Path uptimePath = java.nio.file.Paths.get("/proc/uptime");
-            String uptimeStr = java.nio.file.Files.readString(uptimePath);
-            double uptimeSeconds = Double.parseDouble(uptimeStr.split("\\s+")[0]);
-            long bootTimeSeconds = (long) (System.currentTimeMillis() / 1000 - uptimeSeconds);
-            
-            // startTime = bootTime + (startTimeTicks / HZ)
-            long startTimeSeconds = bootTimeSeconds + (startTimeTicks / HZ);
-            LocalDateTime startTime = LocalDateTime.ofInstant(
-                    Instant.ofEpochSecond(startTimeSeconds),
-                    ZoneId.systemDefault());
-            
-            return startTime.toString().replace('T', ' ');
+            return LocalDateTime.ofInstant(Instant.ofEpochSecond(startTimeSeconds), ZoneId.systemDefault())
+                    .toString().replace('T', ' ');
         } catch (Exception e) {
-            // Fallback: hiển thị ticks
-            return startTimeTicks + " ticks (from boot)";
+            return startTimeTicks + " ticks";
         }
-    }
-
-    private String safe(String value, String fallback) {
-        return (value == null || value.isBlank()) ? fallback : value;
     }
 }
