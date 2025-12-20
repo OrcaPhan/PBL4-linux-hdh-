@@ -28,6 +28,9 @@ target/
 nbproject/private/
 dist/
 build/
+dependency-reduced-pom.xml
+javac.*.args
+
 # ===========================
 # OS files
 # ===========================
